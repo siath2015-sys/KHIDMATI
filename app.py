@@ -527,15 +527,27 @@ def center_dashboard():
 def display_screen(center_id):
     conn = get_db_connection()
     center = conn.execute('SELECT * FROM centers WHERE id = ?', (center_id,)).fetchone()
+    video = conn.execute('SELECT * FROM videos WHERE is_active = 1').fetchone()
+    announcement = conn.execute('SELECT * FROM announcements WHERE is_active = 1').fetchone()
     conn.close()
+    
     if not center:
         return "المركز غير موجود", 404
+        
+    video_url = video['url'] if video else ""
+    # تحويل رابط يوتيوب العادي إلى رابط تضمين Embed إذا لزم الأمر
+    if "watch?v=" in video_url:
+        video_url = video_url.replace("watch?v=", "embed/") + "?autoplay=1&mute=1&loop=1"
+    elif "youtu.be/" in video_url:
+        vid_id = video_url.split("/")[-1]
+        video_url = f"https://www.youtube.com/embed/{vid_id}?autoplay=1&mute=1&loop=1"
+
+    announcement_text = announcement['content'] if announcement else "مرحباً بكم في مديرية الضرائب - يرجى احترام دوركم وسلامتكم."
 
     return render_template_string('''
     <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>شاشة العرض - {{ center.center_name }}</title>
-    <!-- مكتبة توليد QR Code من خلال CDN -->
+    <!-- مكتبة توليد QR Code عبر CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         :root { --gov-blue: #0284c7; --gov-green: #0d9488; --gold: #fbbf24; }
         body { background: linear-gradient(135deg, #0284c7 0%, #0891b2 50%, #0d9488 100%); color: #fff; font-family: 'Segoe UI', Tahoma; margin: 0; padding: 10px; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
@@ -547,30 +559,52 @@ def display_screen(center_id):
         .main-content { display: flex; gap: 15px; flex-grow: 1; margin-top: 10px; height: calc(100vh - 115px); }
         .right-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; }
         .current-box { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border-radius: 12px; padding: 15px; text-align: center; border: 2px solid rgba(255, 255, 255, 0.3); }
-        .current-ticket { font-size: 70px; font-weight: 900; color: #fff; margin: 0; line-height: 1; }
-        .qr-direct-container { display: flex; align-items: center; justify-content: center; gap: 12px; background: #fff; padding: 10px; border-radius: 10px; margin-top: 15px; color: #000; }
+        .current-ticket { font-size: 65px; font-weight: 900; color: #fff; margin: 0; line-height: 1; }
+        .qr-direct-container { display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff; padding: 8px; border-radius: 10px; margin-top: 12px; color: #000; }
         .history-box { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px; flex-grow: 1; overflow: hidden; }
-        .history-item { background: rgba(0, 0, 0, 0.25); padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 14px; border-right: 4px solid var(--gold); }
-        .video-section { flex: 2; background: #000; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-        .ticker-wrap { background: #ffffff; color: #dc2626; padding: 10px; border-radius: 8px; margin-top: 8px; font-weight: bold; overflow: hidden; white-space: nowrap; }
+        .history-item { background: rgba(0, 0, 0, 0.25); padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 13px; border-right: 4px solid var(--gold); display: flex; justify-content: space-between; align-items: center; }
+        .video-section { flex: 2; background: #000; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; border: 2px solid rgba(255,255,255,0.2); }
+        .ticker-wrap { background: #ffffff; color: #dc2626; padding: 10px; border-radius: 8px; margin-top: 8px; font-weight: bold; overflow: hidden; white-space: nowrap; font-size: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
     </style></head>
     <body>
     <header class="official-header">
         <div class="center-badge">🏢 {{ center.center_name }}</div>
         <div class="datetime-box"><div id="liveTime" class="current-time">--:--:--</div><div id="liveDate" class="current-date"></div></div>
     </header>
+    
     <div class="main-content">
+        <!-- القسم الأيمن: التذكرة الحالية وسجل النداءات -->
         <div class="right-panel">
             <div class="current-box">
-                <div style="font-size: 14px; margin-bottom: 5px;">التذكرة الحالية</div>
+                <div style="font-size: 14px; margin-bottom: 5px; color: #f8fafc;">التذكرة الحالية قيد الخدمة</div>
                 <div id="currTicket" class="current-ticket">---</div>
-                <div id="currService" style="color: var(--gold); font-weight: bold; font-size: 18px; margin-top: 5px;">في انتظار النداء...</div>
+                <div id="currService" style="color: var(--gold); font-weight: bold; font-size: 16px; margin-top: 5px;">في انتظار النداء...</div>
                 <div class="qr-direct-container">
                     <div id="qrcode"></div>
-                    <div style="text-align: right; font-size: 13px;"><strong>تابع دورك</strong><br><small>امسح الكود لمعرفة حالتك</small></div>
+                    <div style="text-align: right; font-size: 12px;"><strong>تابع دورك لحظة بلحظة</strong><br><small>امسح الكود بهاتفك</small></div>
+                </div>
+            </div>
+            
+            <div class="history-box">
+                <div style="font-size: 13px; margin-bottom: 5px; color: #cbd5e1; font-weight: bold;">آخر التذاكر المناداة:</div>
+                <div id="historyList">
+                    <div style="color: #94a3b8; text-align: center; font-size: 13px; padding: 10px;">لا توجد نداءات سابقة حالياً</div>
                 </div>
             </div>
         </div>
+
+        <!-- القسم الأيسر: الفيديو والتطوير -->
+        <div class="video-section">
+            {% if video_url %}
+            <iframe src="{{ video_url }}" style="width:100%; height:100%; border:none;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+            {% else %}
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #64748b; font-size: 18px;">لا يوجد فيديو ترويجي نشط حالياً</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="ticker-wrap">
+        <marquee scrollamount="5">{{ announcement_text }}</marquee>
     </div>
 
     <script>
@@ -585,7 +619,7 @@ def display_screen(center_id):
 
         let lastTicket = "";
 
-        // دالة جلب التذكرة الحالية وتحديث الصوت والـ QR
+        // دالة جلب التذكرة الحالية
         function fetchCurrentTicket() {
             fetch('/api/current-ticket/{{ center.id }}')
                 .then(res => res.json())
@@ -595,18 +629,18 @@ def display_screen(center_id):
                         document.getElementById('currTicket').innerText = data.ticket;
                         document.getElementById('currService').innerText = data.service_name;
                         
-                        // 1. توليد الـ QR Code برابط مباشر
+                        // تحديث الـ QR Code برابط مباشر
                         const qrContainer = document.getElementById("qrcode");
                         qrContainer.innerHTML = "";
                         new QRCode(qrContainer, {
                             text: window.location.origin + "/status/" + data.ticket,
-                            width: 65,
-                            height: 65
+                            width: 60,
+                            height: 60
                         });
                         
-                        // 2. تشغيل التنبيه الصوتي عبر رابط مباشر جاهز
+                        // تشغيل صوت التنبيه المباشر
                         const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-                        audio.play().catch(e => console.log("الصوت يتطلب تفاعل المستخدم أولاً"));
+                        audio.play().catch(e => console.log("تفاعل المستخدم مطلوب لتشغيل الصوت"));
                     }
                 }).catch(err => console.log(err));
         }
@@ -614,7 +648,7 @@ def display_screen(center_id):
         setInterval(fetchCurrentTicket, 3000);
     </script>
     </body></html>
-    ''', center=center)
+    ''', center=center, video_url=video_url, announcement_text=announcement_text)
 @app.route('/api/display-data/<int:center_id>')
 def api_display_data(center_id):
     conn = get_db_connection()
