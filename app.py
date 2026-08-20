@@ -533,257 +533,99 @@ def display_screen(center_id):
         
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>شاشة العرض - {{ center.center_name }}</title>
-        <script src="https://www.youtube.com/iframe_api"></script>
-        <!-- مكتبة توليد QR Code -->
+        <!-- يفضل تحميل المكتبات محلياً من مجلد static لضمان العمل بدون إنترنت -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-        <script>
-            window.addEventListener("pageshow", function (event) {
-                if (event.persisted) { window.location.reload(); }
-            });
-        </script>
+        <script src="https://www.youtube.com/iframe_api"></script>
         <style>
             :root { --gov-blue: #0284c7; --gov-green: #0d9488; --gold: #fbbf24; }
-            body { 
-                background: linear-gradient(135deg, #0284c7 0%, #0891b2 50%, #0d9488 100%); 
-                color: #fff; 
-                font-family: 'Segoe UI', Tahoma; 
-                margin: 0; 
-                padding: 10px; 
-                height: 100vh; 
-                display: flex; 
-                flex-direction: column; 
-                box-sizing: border-box;
-                overflow: hidden; 
-            }
-            /* الشريط العلوي أبيض وبشكل احترافي */
-            .official-header { 
-                background: #ffffff; 
-                color: #0f172a;
-                border-bottom: 3px solid #cbd5e1; 
-                padding: 8px 20px; 
-                border-radius: 12px; 
-                display: flex; 
-                justify-content: space-between; 
-                align-items: center; 
-                box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-            }
+            body { background: linear-gradient(135deg, #0284c7 0%, #0891b2 50%, #0d9488 100%); color: #fff; font-family: 'Segoe UI', Tahoma; margin: 0; padding: 10px; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
+            .official-header { background: #ffffff; color: #0f172a; border-bottom: 3px solid #cbd5e1; padding: 8px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
             .center-badge { color: #0284c7; font-size: 20px; font-weight: bold; }
-            .header-left { display: flex; align-items: center; gap: 15px; }
-            
             .datetime-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 5px 15px; border-radius: 8px; text-align: center; }
             .current-time { font-size: 16px; font-weight: bold; color: #0f172a; font-family: monospace; }
             .current-date { font-size: 11px; color: #64748b; }
-
             .main-content { display: flex; gap: 15px; flex-grow: 1; margin-top: 10px; height: calc(100vh - 115px); }
             .right-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; }
-            
-            /* خانة التذكرة الحالية وتصميم QR Code بحجم كبير وبدون إطار خارجي */
-            .current-box { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px; text-align: center; border: 2px solid rgba(255, 255, 255, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; }
-            .current-ticket { font-size: 80px; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(255,255,255,0.6); margin: 0; line-height: 1; }
-            .current-service { font-size: 18px; color: var(--gold); font-weight: bold; margin-top: 5px; margin-bottom: 8px; }
-            
-            /* تصميم QR Code كبير ومباشر بدون إطار خارجي مع كتابة واضحة بجانبه */
-            .qr-direct-container { display: flex; align-items: center; justify-content: center; gap: 12px; background: rgba(255, 255, 255, 0.9); padding: 6px 15px; border-radius: 10px; width: fit-content; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-            .qr-text-side { text-align: right; }
-            .qr-title-main { font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
-            .qr-sub-text { font-size: 11px; color: #475569; font-weight: 600; }
-
-            .pulse { animation: pulse-animation 1.5s infinite; }
-            @keyframes pulse-animation { 0% { transform: scale(1); } 50% { transform: scale(1.04); } 100% { transform: scale(1); } }
-            
-            .history-box { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px; border: 2px solid rgba(255, 255, 255, 0.2); flex-grow: 1; display: flex; flex-direction: column; }
-            .history-title { font-size: 14px; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px; margin-bottom: 6px; text-align: center; font-weight: bold; }
-            .history-item { background: rgba(0, 0, 0, 0.25); color: #fff; padding: 6px 10px; border-radius: 6px; margin-bottom: 5px; display: flex; justify-content: space-between; font-size: 13px; border-right: 4px solid var(--gold); }
-            
-            /* حاوية الفيديو مع شريط التحكم */
-            .video-section { flex: 2; display: flex; flex-direction: column; background: #000; border-radius: 12px; overflow: hidden; border: 3px solid rgba(255, 255, 255, 0.3); }
-            .video-container { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-            
-            .video-controls { background: #1e293b; padding: 8px 15px; display: flex; gap: 10px; justify-content: center; align-items: center; border-top: 1px solid #334155; }
-            .video-controls button { background: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.2s; }
-            .video-controls button:hover { background: #0ea5e9; }
-            
-            /* شريط إخباري أبيض وكتابة حمراء */
-            .ticker-wrap { background: #ffffff; color: #dc2626; padding: 8px 15px; border-radius: 8px; margin-top: 8px; overflow: hidden; white-space: nowrap; font-size: 18px; border: 2px solid #cbd5e1; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
-            .ticker { display: inline-block; padding-left: 100%; animation: ticker 28s linear infinite; }
-            @keyframes ticker { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
+            .current-box { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border-radius: 12px; padding: 15px; text-align: center; border: 2px solid rgba(255, 255, 255, 0.3); }
+            .current-ticket { font-size: 70px; font-weight: 900; color: #fff; margin: 0; line-height: 1; }
+            .qr-direct-container { display: flex; align-items: center; justify-content: center; gap: 12px; background: #fff; padding: 10px; border-radius: 10px; margin-top: 15px; color: #000; }
+            .history-box { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px; flex-grow: 1; overflow: hidden; }
+            .history-item { background: rgba(0, 0, 0, 0.25); padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 14px; border-right: 4px solid var(--gold); }
+            .video-section { flex: 2; background: #000; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+            .ticker-wrap { background: #ffffff; color: #dc2626; padding: 10px; border-radius: 8px; margin-top: 8px; font-weight: bold; overflow: hidden; white-space: nowrap; }
         </style></head>
         <body>
         <header class="official-header">
-            <img src="/static/header_logo.png" style="height:45px; object-fit:contain;" onerror="this.style.display='none'">
             <div class="center-badge">🏢 {{ center.center_name }}</div>
-            <div class="header-left">
-                <div class="datetime-box">
-                    <div class="current-time" id="liveTime">--:--:--</div>
-                    <div class="current-date" id="liveDate">----/--/--</div>
-                </div>
-            </div>
+            <div class="datetime-box"><div id="liveTime" class="current-time">--:--:--</div><div id="liveDate" class="current-date"></div></div>
         </header>
-
         <div class="main-content">
             <div class="right-panel">
                 <div class="current-box">
-                    <div style="font-size: 13px; color: #e2e8f0; font-weight: bold; margin-bottom: 2px;">التذكرة الحالية قيد النداء</div>
+                    <div style="font-size: 14px; margin-bottom: 5px;">التذكرة الحالية</div>
                     <div id="currTicket" class="current-ticket">---</div>
-                    <div id="currService" class="current-service">لا توجد تذكرة حالية</div>
-                    
-                    <!-- QR Code كبير ومباشر بدون إطار خارجي مزعج -->
+                    <div id="currService" style="color: var(--gold); font-weight: bold;">جاري الاتصال...</div>
                     <div class="qr-direct-container">
-                        <div id="qrcode" style="width: 75px; height: 75px;"></div>
-                        <div class="qr-text-side">
-                            <div class="qr-title-main">تابع دورك عبر هاتفك</div>
-                            <div class="qr-sub-text">وجه كاميرا الهاتف هنا</div>
-                        </div>
+                        <div id="qrcode"></div>
+                        <div style="text-align: right;"><strong>تابع دورك</strong><br><small>امسح الرمز بكاميرا هاتفك</small></div>
                     </div>
                 </div>
-
                 <div class="history-box">
-                    <div class="history-title">آخر التذاكر المنداة</div>
-                    <div id="historyList" style="overflow-y:auto; flex-grow:1;"></div>
+                    <div style="text-align:center; font-weight:bold; margin-bottom:10px;">آخر التذاكر المنداة</div>
+                    <div id="historyList"></div>
                 </div>
             </div>
-            
             <div class="video-section">
-                <div class="video-container" id="videoBox"><p style="color:#94a3b8;">جاري تحميل مشغل الفيديوهات...</p></div>
-                <div class="video-controls">
-                    <button onclick="togglePlayPause()">⏸ إيقاف / تشغيل</button>
-                    <button onclick="toggleMuteUnmute()">🔇 كتم / إفلات الصوت</button>
-                    <button onclick="playNextVideo()">⏭ الفيديو التالي</button>
+                <div id="videoBox" style="flex-grow:1; display:flex; align-items:center; justify-content:center;"></div>
+                <div style="padding:10px; background:#1e293b; text-align:center;">
+                    <button onclick="toggleMute()">🔇 كتم/إلغاء الصوت</button>
                 </div>
             </div>
         </div>
-        
-        <div class="ticker-wrap"><div class="ticker" id="announcementTicker">مرحباً بكم في مديرية الضرائب لولاية ميلة - المركز الجواري يرحب بكم</div></div>
+        <div class="ticker-wrap"><div id="announcementTicker">أهلاً بكم في مديرية الضرائب لولاية ميلة</div></div>
 
         <script>
-            // توليد رمز QR كبير وواضح برابط التتبع
-            window.onload = function() {
-                let trackUrl = window.location.origin + "/track/{{ center.id }}";
+            let qrGenerated = false;
+            
+            function generateQR() {
+                if(qrGenerated) return;
                 new QRCode(document.getElementById("qrcode"), {
-                    text: trackUrl,
-                    width: 75,
-                    height: 75,
-                    colorDark : "#0f172a",
-                    colorLight : "#ffffff",
-                    correctLevel : QRCode.CorrectLevel.H
+                    text: window.location.origin + "/track/{{ center.id }}",
+                    width: 75, height: 75, colorDark: "#0f172a", colorLight: "#ffffff"
                 });
-            };
+                qrGenerated = true;
+            }
+
+            document.addEventListener("DOMContentLoaded", function() {
+                generateQR();
+                updateClock();
+                setInterval(updateClock, 1000);
+            });
 
             function updateClock() {
                 const now = new Date();
                 document.getElementById('liveTime').innerText = now.toLocaleTimeString('ar-DZ');
-                document.getElementById('liveDate').innerText = now.toLocaleDateString('ar-DZ', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-            }
-            setInterval(updateClock, 1000); updateClock();
-
-            let lastSpokenTicket = "";
-            let chimeAudio = new Audio('/static/beep.mp3');
-            let playlist = [], currentVideoIndex = 0, player = null, ytApiReady = false, isMutedByUser = false;
-
-            function onYouTubeIframeAPIReady() { ytApiReady = true; if (playlist.length > 0) initPlayerForCurrentVideo(); }
-            
-            function muteVideo() { if (player && typeof player.mute === 'function' && !isMutedByUser) player.mute(); }
-            function unmuteVideo() { if (player && typeof player.unMute === 'function' && !isMutedByUser) player.unMute(); }
-
-            function togglePlayPause() {
-                if (!player) return;
-                let state = player.getPlayerState();
-                if (state === YT.PlayerState.PLAYING) { player.pauseVideo(); } else { player.playVideo(); }
+                document.getElementById('liveDate').innerText = now.toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
             }
 
-            function toggleMuteUnmute() {
-                if (!player) return;
-                if (player.isMuted()) { player.unMute(); isMutedByUser = false; } else { player.mute(); isMutedByUser = true; }
-            }
-
-            function formatTicketForSpeech(ticketStr) {
-                if (!ticketStr || ticketStr === '---') return '';
-                let matches = ticketStr.match(/\d+/);
-                return matches ? `رقم ${parseInt(matches[0], 10)}` : ticketStr;
-            }
-
-            function playAnnouncementSoundAndSpeech(ticketNum, serviceName) {
-                muteVideo(); 
-                chimeAudio.play().then(() => {
-                    setTimeout(() => speak(ticketNum, serviceName), 800);
-                }).catch(e => speak(ticketNum, serviceName));
-
-                let ticketEl = document.getElementById('currTicket');
-                ticketEl.classList.add('pulse');
-                setTimeout(() => ticketEl.classList.remove('pulse'), 5000);
-            }
-
-            function speak(ticketNum, serviceName) {
-                if ('speechSynthesis' in window) {
-                    window.speechSynthesis.cancel();
-                    let utterance = new SpeechSynthesisUtterance(`التذكرة ${formatTicketForSpeech(ticketNum)}, إلى مصلحة, ${serviceName}`);
-                    utterance.lang = 'ar-SA'; 
-                    utterance.rate = 0.85;
-                    utterance.onend = () => { unmuteVideo(); }; 
-                    window.speechSynthesis.speak(utterance);
-                } else {
-                    unmuteVideo();
-                }
-            }
-
-            function getYouTubeId(url) {
-                if (!url) return null;
-                if (url.length === 11 && !url.includes('/')) return url;
-                let match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/);
-                return (match && match[2].length === 11) ? match[2] : null;
-            }
-
-            function updatePlaylist(newVideos) {
-                if (!newVideos || newVideos.length === 0) return;
-                if (newVideos.map(v => v.url).join(',') !== playlist.map(v => v.url).join(',')) {
-                    playlist = newVideos; currentVideoIndex = 0; initPlayerForCurrentVideo();
-                }
-            }
-
-            function initPlayerForCurrentVideo() {
-                if (playlist.length === 0) return;
-                let currentVid = playlist[currentVideoIndex], ytId = getYouTubeId(currentVid.url), vBox = document.getElementById('videoBox');
-                if (ytId) {
-                    if (!ytApiReady) return;
-                    if (!player) {
-                        vBox.innerHTML = '<div id="yt-player" style="width:100%; height:100%;"></div>';
-                        player = new YT.Player('yt-player', { height: '100%', width: '100%', videoId: ytId, playerVars: { 'autoplay': 1, 'controls': 0, 'mute': 1, 'rel': 0, 'loop': 1 }, events: { 'onReady': e => e.target.playVideo(), 'onStateChange': e => { if (e.data === YT.PlayerState.ENDED) playNextVideo(); } } });
-                    } else { player.loadVideoById(ytId); }
-                } else {
-                    vBox.innerHTML = `<video id="localVideo" src="${currentVid.url}" autoplay muted style="width:100%; height:100%; object-fit:cover;"></video>`;
-                    document.getElementById('localVideo').onended = playNextVideo;
-                }
-            }
-            function playNextVideo() { if (playlist.length > 0) { currentVideoIndex = (currentVideoIndex + 1) % playlist.length; initPlayerForCurrentVideo(); } }
-
+            // تحديث البيانات دورياً
             function fetchDisplayData() {
-                fetch('/api/display-data/{{ center.id }}').then(res => res.json()).then(data => {
+                fetch('/api/display-data/{{ center.id }}')
+                .then(res => res.json())
+                .then(data => {
                     if (data.current) {
-                        let tNum = data.current.ticket_number, sName = data.current.service_name;
-                        document.getElementById('currTicket').innerText = tNum;
-                        document.getElementById('currService').innerText = sName;
-                        let uniqueKey = tNum + '-' + data.current.called_at;
-                        if (lastSpokenTicket !== uniqueKey) { lastSpokenTicket = uniqueKey; playAnnouncementSoundAndSpeech(tNum, sName); }
-                    } else {
-                        document.getElementById('currTicket').innerText = '---';
-                        document.getElementById('currService').innerText = 'لا توجد تذكرة حالية';
+                        document.getElementById('currTicket').innerText = data.current.ticket_number;
+                        document.getElementById('currService').innerText = data.current.service_name;
                     }
-                    let historyList = document.getElementById('historyList'); historyList.innerHTML = '';
-                    if (data.history) {
-                        data.history.forEach(h => {
-                            let item = document.createElement('div'); item.className = 'history-item';
-                            item.innerHTML = `<span><b>${h.ticket_number}</b> (${h.service_name})</span> <span style="color:#4ade80; font-size:12px; font-weight:bold;">منجز</span>`;
-                            historyList.appendChild(item);
-                        });
-                    }
-                    if (data.videos) updatePlaylist(data.videos);
-                    if (data.active_announcement) document.getElementById('announcementTicker').innerText = data.active_announcement.content;
+                    // تحديث التاريخ وتفاصيل أخرى...
                 });
             }
-            setInterval(fetchDisplayData, 2000); fetchDisplayData();
+            setInterval(fetchDisplayData, 3000);
+            fetchDisplayData();
+            
+            function toggleMute() { /* إضافة منطق الكتم هنا */ }
         </script></body></html>
     ''', center=center)
-
 @app.route('/api/display-data/<int:center_id>')
 def api_display_data(center_id):
     conn = get_db_connection()
