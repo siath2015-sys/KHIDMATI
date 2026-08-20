@@ -528,103 +528,92 @@ def display_screen(center_id):
     conn = get_db_connection()
     center = conn.execute('SELECT * FROM centers WHERE id = ?', (center_id,)).fetchone()
     conn.close()
-    if not center: 
+    if not center:
         return "المركز غير موجود", 404
-        
+
     return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>شاشة العرض - {{ center.center_name }}</title>
-        <!-- يفضل تحميل المكتبات محلياً من مجلد static لضمان العمل بدون إنترنت -->
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-        <script src="https://www.youtube.com/iframe_api"></script>
-        <style>
-            :root { --gov-blue: #0284c7; --gov-green: #0d9488; --gold: #fbbf24; }
-            body { background: linear-gradient(135deg, #0284c7 0%, #0891b2 50%, #0d9488 100%); color: #fff; font-family: 'Segoe UI', Tahoma; margin: 0; padding: 10px; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
-            .official-header { background: #ffffff; color: #0f172a; border-bottom: 3px solid #cbd5e1; padding: 8px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
-            .center-badge { color: #0284c7; font-size: 20px; font-weight: bold; }
-            .datetime-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 5px 15px; border-radius: 8px; text-align: center; }
-            .current-time { font-size: 16px; font-weight: bold; color: #0f172a; font-family: monospace; }
-            .current-date { font-size: 11px; color: #64748b; }
-            .main-content { display: flex; gap: 15px; flex-grow: 1; margin-top: 10px; height: calc(100vh - 115px); }
-            .right-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; }
-            .current-box { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border-radius: 12px; padding: 15px; text-align: center; border: 2px solid rgba(255, 255, 255, 0.3); }
-            .current-ticket { font-size: 70px; font-weight: 900; color: #fff; margin: 0; line-height: 1; }
-            .qr-direct-container { display: flex; align-items: center; justify-content: center; gap: 12px; background: #fff; padding: 10px; border-radius: 10px; margin-top: 15px; color: #000; }
-            .history-box { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px; flex-grow: 1; overflow: hidden; }
-            .history-item { background: rgba(0, 0, 0, 0.25); padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 14px; border-right: 4px solid var(--gold); }
-            .video-section { flex: 2; background: #000; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-            .ticker-wrap { background: #ffffff; color: #dc2626; padding: 10px; border-radius: 8px; margin-top: 8px; font-weight: bold; overflow: hidden; white-space: nowrap; }
-        </style></head>
-        <body>
-        <header class="official-header">
-            <div class="center-badge">🏢 {{ center.center_name }}</div>
-            <div class="datetime-box"><div id="liveTime" class="current-time">--:--:--</div><div id="liveDate" class="current-date"></div></div>
-        </header>
-        <div class="main-content">
-            <div class="right-panel">
-                <div class="current-box">
-                    <div style="font-size: 14px; margin-bottom: 5px;">التذكرة الحالية</div>
-                    <div id="currTicket" class="current-ticket">---</div>
-                    <div id="currService" style="color: var(--gold); font-weight: bold;">جاري الاتصال...</div>
-                    <div class="qr-direct-container">
-                        <div id="qrcode"></div>
-                        <div style="text-align: right;"><strong>تابع دورك</strong><br><small>امسح الرمز بكاميرا هاتفك</small></div>
-                    </div>
-                </div>
-                <div class="history-box">
-                    <div style="text-align:center; font-weight:bold; margin-bottom:10px;">آخر التذاكر المنداة</div>
-                    <div id="historyList"></div>
-                </div>
-            </div>
-            <div class="video-section">
-                <div id="videoBox" style="flex-grow:1; display:flex; align-items:center; justify-content:center;"></div>
-                <div style="padding:10px; background:#1e293b; text-align:center;">
-                    <button onclick="toggleMute()">🔇 كتم/إلغاء الصوت</button>
+    <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>شاشة العرض - {{ center.center_name }}</title>
+    <!-- مكتبة توليد QR Code من خلال CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <style>
+        :root { --gov-blue: #0284c7; --gov-green: #0d9488; --gold: #fbbf24; }
+        body { background: linear-gradient(135deg, #0284c7 0%, #0891b2 50%, #0d9488 100%); color: #fff; font-family: 'Segoe UI', Tahoma; margin: 0; padding: 10px; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
+        .official-header { background: #ffffff; color: #0f172a; border-bottom: 3px solid #cbd5e1; padding: 8px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
+        .center-badge { color: #0284c7; font-size: 20px; font-weight: bold; }
+        .datetime-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 5px 15px; border-radius: 8px; text-align: center; }
+        .current-time { font-size: 16px; font-weight: bold; color: #0f172a; font-family: monospace; }
+        .current-date { font-size: 11px; color: #64748b; }
+        .main-content { display: flex; gap: 15px; flex-grow: 1; margin-top: 10px; height: calc(100vh - 115px); }
+        .right-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+        .current-box { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border-radius: 12px; padding: 15px; text-align: center; border: 2px solid rgba(255, 255, 255, 0.3); }
+        .current-ticket { font-size: 70px; font-weight: 900; color: #fff; margin: 0; line-height: 1; }
+        .qr-direct-container { display: flex; align-items: center; justify-content: center; gap: 12px; background: #fff; padding: 10px; border-radius: 10px; margin-top: 15px; color: #000; }
+        .history-box { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px; flex-grow: 1; overflow: hidden; }
+        .history-item { background: rgba(0, 0, 0, 0.25); padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 14px; border-right: 4px solid var(--gold); }
+        .video-section { flex: 2; background: #000; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+        .ticker-wrap { background: #ffffff; color: #dc2626; padding: 10px; border-radius: 8px; margin-top: 8px; font-weight: bold; overflow: hidden; white-space: nowrap; }
+    </style></head>
+    <body>
+    <header class="official-header">
+        <div class="center-badge">🏢 {{ center.center_name }}</div>
+        <div class="datetime-box"><div id="liveTime" class="current-time">--:--:--</div><div id="liveDate" class="current-date"></div></div>
+    </header>
+    <div class="main-content">
+        <div class="right-panel">
+            <div class="current-box">
+                <div style="font-size: 14px; margin-bottom: 5px;">التذكرة الحالية</div>
+                <div id="currTicket" class="current-ticket">---</div>
+                <div id="currService" style="color: var(--gold); font-weight: bold; font-size: 18px; margin-top: 5px;">في انتظار النداء...</div>
+                <div class="qr-direct-container">
+                    <div id="qrcode"></div>
+                    <div style="text-align: right; font-size: 13px;"><strong>تابع دورك</strong><br><small>امسح الكود لمعرفة حالتك</small></div>
                 </div>
             </div>
         </div>
-        <div class="ticker-wrap"><div id="announcementTicker">أهلاً بكم في مديرية الضرائب لولاية ميلة</div></div>
+    </div>
 
-        <script>
-            let qrGenerated = false;
-            
-            function generateQR() {
-                if(qrGenerated) return;
-                new QRCode(document.getElementById("qrcode"), {
-                    text: window.location.origin + "/track/{{ center.id }}",
-                    width: 75, height: 75, colorDark: "#0f172a", colorLight: "#ffffff"
-                });
-                qrGenerated = true;
-            }
+    <script>
+        // تحديث التاريخ والوقت
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('liveTime').innerText = now.toLocaleTimeString('ar-EG');
+            document.getElementById('liveDate').innerText = now.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
 
-            document.addEventListener("DOMContentLoaded", function() {
-                generateQR();
-                updateClock();
-                setInterval(updateClock, 1000);
-            });
+        let lastTicket = "";
 
-            function updateClock() {
-                const now = new Date();
-                document.getElementById('liveTime').innerText = now.toLocaleTimeString('ar-DZ');
-                document.getElementById('liveDate').innerText = now.toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            }
-
-            // تحديث البيانات دورياً
-            function fetchDisplayData() {
-                fetch('/api/display-data/{{ center.id }}')
+        // دالة جلب التذكرة الحالية وتحديث الصوت والـ QR
+        function fetchCurrentTicket() {
+            fetch('/api/current-ticket/{{ center.id }}')
                 .then(res => res.json())
                 .then(data => {
-                    if (data.current) {
-                        document.getElementById('currTicket').innerText = data.current.ticket_number;
-                        document.getElementById('currService').innerText = data.current.service_name;
+                    if (data.ticket && data.ticket !== lastTicket) {
+                        lastTicket = data.ticket;
+                        document.getElementById('currTicket').innerText = data.ticket;
+                        document.getElementById('currService').innerText = data.service_name;
+                        
+                        // 1. توليد الـ QR Code برابط مباشر
+                        const qrContainer = document.getElementById("qrcode");
+                        qrContainer.innerHTML = "";
+                        new QRCode(qrContainer, {
+                            text: window.location.origin + "/status/" + data.ticket,
+                            width: 65,
+                            height: 65
+                        });
+                        
+                        // 2. تشغيل التنبيه الصوتي عبر رابط مباشر جاهز
+                        const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+                        audio.play().catch(e => console.log("الصوت يتطلب تفاعل المستخدم أولاً"));
                     }
-                    // تحديث التاريخ وتفاصيل أخرى...
-                });
-            }
-            setInterval(fetchDisplayData, 3000);
-            fetchDisplayData();
-            
-            function toggleMute() { /* إضافة منطق الكتم هنا */ }
-        </script></body></html>
+                }).catch(err => console.log(err));
+        }
+        
+        setInterval(fetchCurrentTicket, 3000);
+    </script>
+    </body></html>
     ''', center=center)
 @app.route('/api/display-data/<int:center_id>')
 def api_display_data(center_id):
