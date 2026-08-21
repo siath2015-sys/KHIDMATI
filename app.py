@@ -4,78 +4,35 @@ from datetime import datetime
 import os
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here_change_it'
+app.secret_key = 'tax_queue_system_secret_key_2026'
 
 def get_db_connection():
     conn = sqlite3.connect('database.db')
     conn.row_factory = sqlite3.Row
     return conn
 
-# دالة لإنشاء الجداول وإدخال بيانات تجريبية إذا لم تكن موجودة
 def init_db():
     conn = get_db_connection()
-    # جدول المراكز
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS centers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            center_name TEXT NOT NULL
-        )
-    ''')
-    # جدول المصالح
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS services (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            center_id INTEGER,
-            service_name TEXT NOT NULL,
-            FOREIGN KEY (center_id) REFERENCES centers (id)
-        )
-    ''')
-    # جدول التذاكر
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS queue_tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            center_id INTEGER,
-            service_id INTEGER,
-            ticket_number TEXT NOT NULL,
-            status TEXT DEFAULT 'WAITING',
-            is_priority INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            called_at TIMESTAMP
-        )
-    ''')
-    # جدول الفيديوهات
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS videos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT NOT NULL
-        )
-    ''')
-    # جدول التنبيهات المتحركة
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS announcements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            content TEXT NOT NULL,
-            is_active INTEGER DEFAULT 1
-        )
-    ''')
+    conn.execute('CREATE TABLE IF NOT EXISTS centers (id INTEGER PRIMARY KEY AUTOINCREMENT, center_name TEXT NOT NULL)')
+    conn.execute('CREATE TABLE IF NOT EXISTS services (id INTEGER PRIMARY KEY AUTOINCREMENT, center_id INTEGER, service_name TEXT NOT NULL, FOREIGN KEY (center_id) REFERENCES centers (id))')
+    conn.execute('CREATE TABLE IF NOT EXISTS queue_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, center_id INTEGER, service_id INTEGER, ticket_number TEXT NOT NULL, status TEXT DEFAULT "WAITING", is_priority INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, called_at TIMESTAMP)')
+    conn.execute('CREATE TABLE IF NOT EXISTS videos (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL)')
+    conn.execute('CREATE TABLE IF NOT EXISTS announcements (id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT NOT NULL, is_active INTEGER DEFAULT 1)')
     
-    # التحقق من وجود مركز تجريبي على الأقل لضمان عدم ظهور خطأ فارغ
-    center_count = conn.execute('SELECT COUNT(*) FROM centers').fetchone()[0]
-    if center_count == 0:
+    # بيانات أولية للتجربة إذا كان القاعدة فارغة
+    if conn.execute('SELECT COUNT(*) FROM centers').fetchone()[0] == 0:
         conn.execute('INSERT INTO centers (center_name) VALUES (?)', ('المركز الجواري للضرائب - ميلة',))
         conn.commit()
-        # إضافة مصلحة افتراضية
-        center_id = conn.execute('SELECT id FROM centers LIMIT 1').fetchone()[0]
-        conn.execute('INSERT INTO services (center_id, service_name) VALUES (?, ?)', (center_id, 'مصلحة الاستقبال والتسجيل'))
+        c_id = conn.execute('SELECT id FROM centers LIMIT 1').fetchone()[0]
+        conn.execute('INSERT INTO services (center_id, service_name) VALUES (?, ?)', (c_id, 'مصلحة الاستقبال والتسجيل'))
+        conn.execute('INSERT INTO services (center_id, service_name) VALUES (?, ?)', (c_id, 'مصلحة الجباية العادية'))
         conn.commit()
-        
     conn.close()
 
-# تشغيل دالة التهيئة عند بدء تشغيل التطبيق
 init_db()
 
 # ==========================================
-# 0. المسار الجذري (الصفحة الرئيسية)
+# 0. الصفحة الرئيسية
 # ==========================================
 @app.route('/')
 def home():
@@ -111,15 +68,222 @@ def home():
     ''', centers=centers)
 
 # ==========================================
-# 1. مسار تسجيل الخروج
+# 1. تسجيل الدخول والخروج
 # ==========================================
+@app.route('/employee-window', methods=['GET', 'POST'])
+def employee_login():
+    conn = get_db_connection()
+    centers = conn.execute('SELECT * FROM centers').fetchall()
+    
+    if request.method == 'POST':
+        action = request.form.get('action')
+        
+        # تسجيل دخول المسؤول العام
+        if action == 'admin':
+            password = request.form.get('password')
+            if password == 'admin123': # كلمة المرور الافتراضية للمسؤول
+                session['role'] = 'admin'
+                conn.close()
+                return redirect(url_for('admin_dashboard'))
+            else:
+                conn.close()
+                return render_template_string('<html><body style="background:#0f172a; color:#fff; font-family:Tahoma; text-align:center; padding-top:100px;"><h3 style="color:#ef4444;">كلمة مرور المسؤول غير صحيحة!</h3><a href="/employee-window" style="color:#38bdf8;">الرجوع للخلف</a></body></html>')
+
+        # تسجيل دخول الموظف/العون
+        center_id = request.form.get('center_id')
+        service_id = request.form.get('service_id')
+        password = request.form.get('password')
+        
+        if password == '1234': # كلمة المرور الافتراضية للموظفين
+            session['role'] = 'employee'
+            session['center_id'] = int(center_id)
+            session['service_id'] = int(service_id)
+            conn.close()
+            return redirect(url_for('employee_interface'))
+        else:
+            conn.close()
+            return render_template_string('<html><body style="background:#0f172a; color:#fff; font-family:Tahoma; text-align:center; padding-top:100px;"><h3 style="color:#ef4444;">كلمة مرور المصلحة غير صحيحة!</h3><a href="/employee-window" style="color:#38bdf8;">الرجوع للخلف</a></body></html>')
+
+    services = conn.execute('SELECT * FROM services').fetchall()
+    conn.close()
+    
+    return render_template_string('''
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>تسجيل الدخول</title>
+        <style>
+            body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .box { background: #1e293b; padding: 30px; border-radius: 15px; width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+            h2 { color: #38bdf8; text-align: center; margin-bottom: 20px; }
+            label { display: block; margin-top: 10px; font-size: 14px; color: #cbd5e1; }
+            select, input { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 14px; box-sizing: border-box; }
+            button { width: 100%; background: #3b82f6; color: #fff; border: none; padding: 12px; margin-top: 20px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px; }
+            button:hover { background: #2563eb; }
+            .admin-box { margin-top: 25px; border-top: 1px solid #334155; padding-top: 15px; }
+        </style></head>
+        <body>
+        <div class="box">
+            <h2>🔐 تسجيل دخول الموظفين</h2>
+            <form method="POST">
+                <label>اختر المركز:</label>
+                <select name="center_id" id="centerSelect" onchange="filterServices()">
+                    {% for c in centers %}
+                    <option value="{{ c.id }}">{{ c.center_name }}</option>
+                    {% endfor %}
+                </select>
+                
+                <label>اختر المصلحة:</label>
+                <select name="service_id" id="serviceSelect">
+                    {% for s in services %}
+                    <option value="{{ s.id }}" data-center="{{ s.center_id }}">{{ s.service_name }}</option>
+                    {% endfor %}
+                </select>
+                
+                <label>رمز مرور الموظف:</label>
+                <input type="password" name="password" placeholder="أدخل رمز المرور" required>
+                
+                <button type="submit">دخول نافذة العون</button>
+            </form>
+            
+            <div class="admin-box">
+                <form method="POST">
+                    <input type="hidden" name="action" value="admin">
+                    <label style="color:#fbbf24;">كلمة مرور المسؤول العام (Admin):</label>
+                    <input type="password" name="password" placeholder="كلمة مرور الإدارة" required>
+                    <button type="submit" style="background:#10b981;">دخول لوحة تحكم المسؤول</button>
+                </form>
+            </div>
+            <div style="text-align: center; margin-top: 15px;"><a href="/" style="color:#94a3b8; font-size:13px; text-decoration:none;">← العودة للرئيسية</a></div>
+        </div>
+        <script>
+            function filterServices() {
+                let cId = document.getElementById('centerSelect').value;
+                let sSelect = document.getElementById('serviceSelect');
+                let options = sSelect.options;
+                for (let i = 0; i < options.length; i++) {
+                    if (options[i].getAttribute('data-center') === cId) {
+                        options[i].style.display = 'block';
+                    } else {
+                        options[i].style.display = 'none';
+                    }
+                }
+            }
+            filterServices();
+        </script>
+        </body></html>
+    ''', centers=centers, services=services)
+
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('home'))
 
 # ==========================================
-# 2. شاشة العرض العامة (Display Screen)
+# 2. لوحة تحكم المسؤول (Admin Dashboard)
+# ==========================================
+@app.route('/admin', methods=['GET', 'POST'])
+def admin_dashboard():
+    if session.get('role') != 'admin':
+        return redirect(url_for('employee_login'))
+    
+    conn = get_db_connection()
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'add_center':
+            name = request.form.get('center_name')
+            if name:
+                conn.execute('INSERT INTO centers (center_name) VALUES (?)', (name,))
+                conn.commit()
+        elif action == 'add_service':
+            c_id = request.form.get('center_id')
+            s_name = request.form.get('service_name')
+            if c_id and s_name:
+                conn.execute('INSERT INTO services (center_id, service_name) VALUES (?, ?)', (c_id, s_name))
+                conn.commit()
+        elif action == 'add_video':
+            v_url = request.form.get('video_url')
+            if v_url:
+                conn.execute('INSERT INTO videos (url) VALUES (?)', (v_url,))
+                conn.commit()
+        elif action == 'add_announcement':
+            content = request.form.get('content')
+            if content:
+                conn.execute('UPDATE announcements SET is_active = 0')
+                conn.execute('INSERT INTO announcements (content, is_active) VALUES (?, 1)', (content,))
+                conn.commit()
+        return redirect(url_for('admin_dashboard'))
+
+    centers = conn.execute('SELECT * FROM centers').fetchall()
+    services = conn.execute('SELECT s.*, c.center_name FROM services s JOIN centers c ON s.center_id = c.id').fetchall()
+    videos = conn.execute('SELECT * FROM videos').fetchall()
+    announcement = conn.execute('SELECT * FROM announcements WHERE is_active = 1 LIMIT 1').fetchone()
+    conn.close()
+
+    return render_template_string('''
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>لوحة التحكم الإدارية</title>
+        <style>
+            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; }
+            .container { max-width: 900px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+            h2 { color: #38bdf8; text-align: center; margin-bottom: 25px; }
+            .section { background: #334155; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+            input, select { width: 100%; padding: 10px; margin-top: 8px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; box-sizing: border-box; }
+            button { background: #10b981; color: #fff; border: none; padding: 10px 20px; margin-top: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+            button:hover { background: #059669; }
+            ul { padding-right: 20px; margin: 10px 0; }
+            li { margin: 5px 0; color: #cbd5e1; }
+        </style></head>
+        <body>
+        <div class="container">
+            <h2>⚙️ لوحة تحكم المسؤول العام</h2>
+            
+            <div class="section">
+                <h3>🏢 إضافة مركز جواري جديد</h3>
+                <form method="POST">
+                    <input type="hidden" name="action" value="add_center">
+                    <input type="text" name="center_name" placeholder="اسم المركز (مثال: المركز الجواري للضرائب - قسنطينة)" required>
+                    <button type="submit">إضافة المركز</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>📌 إضافة مصلحة جديدة</h3>
+                <form method="POST">
+                    <input type="hidden" name="action" value="add_service">
+                    <select name="center_id">
+                        {% for c in centers %}
+                        <option value="{{ c.id }}">{{ c.center_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="text" name="service_name" placeholder="اسم المصلحة (مثال: مصلحة الوعاء الضريبي)" required>
+                    <button type="submit">إضافة المصلحة</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>📺 إضافة فيديو توعوي (يوتيوب أو رابط مباشر)</h3>
+                <form method="POST">
+                    <input type="hidden" name="action" value="add_video">
+                    <input type="text" name="video_url" placeholder="رابط اليوتيوب (Embed أو Watch)" required>
+                    <button type="submit">إضافة الفيديو</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>📢 تحديث شريط الإعلانات المتحرك</h3>
+                <form method="POST">
+                    <input type="hidden" name="action" value="add_announcement">
+                    <input type="text" name="content" value="{{ announcement.content if announcement else '' }}" placeholder="نص الإعلان..." required>
+                    <button type="submit">تحديث الإعلان</button>
+                </form>
+            </div>
+
+            <div style="text-align: center; margin-top: 20px;">
+                <a href="/logout" style="background:#ef4444; color:#fff; padding:10px 20px; border-radius:6px; text-decoration:none; font-weight:bold;">تسجيل الخروج 🚪</a>
+            </div>
+        </div>
+        </body></html>
+    ''', centers=centers, services=services, videos=videos, announcement=announcement)
+
+# ==========================================
+# 3. شاشة العرض العامة (Display Screen)
 # ==========================================
 @app.route('/display/<int:center_id>')
 def display_screen(center_id):
@@ -146,10 +310,6 @@ def display_screen(center_id):
             .current-box { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px; text-align: center; border: 2px solid rgba(255, 255, 255, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; }
             .current-ticket { font-size: 80px; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(255,255,255,0.6); margin: 0; line-height: 1; }
             .current-service { font-size: 18px; color: #fbbf24; font-weight: bold; margin-top: 5px; margin-bottom: 8px; }
-            .qr-direct-container { display: flex; align-items: center; justify-content: center; gap: 12px; background: rgba(255, 255, 255, 0.9); padding: 6px 15px; border-radius: 10px; width: fit-content; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-            .qr-text-side { text-align: right; }
-            .qr-title-main { font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
-            .qr-sub-text { font-size: 11px; color: #475569; font-weight: 600; }
             .pulse { animation: pulse-animation 1.5s infinite; }
             @keyframes pulse-animation { 0% { transform: scale(1); } 50% { transform: scale(1.04); } 100% { transform: scale(1); } }
             .history-box { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px; border: 2px solid rgba(255, 255, 255, 0.2); flex-grow: 1; display: flex; flex-direction: column; }
@@ -157,8 +317,6 @@ def display_screen(center_id):
             .history-item { background: rgba(0, 0, 0, 0.25); color: #fff; padding: 6px 10px; border-radius: 6px; margin-bottom: 5px; display: flex; justify-content: space-between; font-size: 13px; border-right: 4px solid #fbbf24; }
             .video-section { flex: 2; display: flex; flex-direction: column; background: #000; border-radius: 12px; overflow: hidden; border: 3px solid rgba(255, 255, 255, 0.3); }
             .video-container { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-            .video-controls { background: #1e293b; padding: 8px 15px; display: flex; gap: 10px; justify-content: center; align-items: center; border-top: 1px solid #334155; }
-            .video-controls button { background: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; }
             .ticker-wrap { background: #ffffff; color: #dc2626; padding: 8px 15px; border-radius: 8px; margin-top: 8px; overflow: hidden; white-space: nowrap; font-size: 18px; border: 2px solid #cbd5e1; font-weight: bold; }
             .ticker { display: inline-block; padding-left: 100%; animation: ticker 28s linear infinite; }
             @keyframes ticker { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
@@ -179,13 +337,6 @@ def display_screen(center_id):
                     <div style="font-size: 13px; color: #e2e8f0; font-weight: bold; margin-bottom: 2px;">التذكرة الحالية قيد النداء</div>
                     <div id="currTicket" class="current-ticket">---</div>
                     <div id="currService" class="current-service">لا توجد تذكرة حالية</div>
-                    <div class="qr-direct-container">
-                        <div id="qrcode" style="width: 75px; height: 75px;"></div>
-                        <div class="qr-text-side">
-                            <div class="qr-title-main">تابع دورك عبر هاتفك</div>
-                            <div class="qr-sub-text">وجه كاميرا الهاتف هنا</div>
-                        </div>
-                    </div>
                 </div>
                 <div class="history-box">
                     <div class="history-title">آخر التذاكر المنداة</div>
@@ -193,19 +344,11 @@ def display_screen(center_id):
                 </div>
             </div>
             <div class="video-section">
-                <div class="video-container" id="videoBox"><p style="color:#94a3b8;">جاري تحميل المشغل...</p></div>
-                <div class="video-controls">
-                    <button onclick="togglePlayPause()">⏸ إيقاف / تشغيل</button>
-                    <button onclick="toggleMuteUnmute()">🔇 كتم / إفلات الصوت</button>
-                </div>
+                <div class="video-container" id="videoBox"><p style="color:#94a3b8;">جاري تحميل الفيديوهات التوعوية...</p></div>
             </div>
         </div>
         <div class="ticker-wrap"><div class="ticker" id="announcementTicker">مرحباً بكم في المركز الجواري للضرائب</div></div>
         <script>
-            window.onload = function() {
-                let trackUrl = window.location.origin + "/kiosk/{{ center.id }}";
-                new QRCode(document.getElementById("qrcode"), { text: trackUrl, width: 75, height: 75, colorDark: "#0f172a", colorLight: "#ffffff" });
-            };
             function updateClock() {
                 const now = new Date();
                 document.getElementById('liveTime').innerText = now.toLocaleTimeString('ar-DZ');
@@ -239,6 +382,9 @@ def display_screen(center_id):
                             historyList.appendChild(item);
                         });
                     }
+                    if (data.active_announcement) {
+                        document.getElementById('announcementTicker').innerText = data.active_announcement.content;
+                    }
                 });
             }
             setInterval(fetchDisplayData, 2000); fetchDisplayData();
@@ -250,14 +396,16 @@ def api_display_data(center_id):
     conn = get_db_connection()
     current = conn.execute('SELECT t.ticket_number, s.service_name, t.called_at FROM queue_tokens t JOIN services s ON t.service_id = s.id WHERE t.center_id = ? AND t.called_at IS NOT NULL ORDER BY t.called_at DESC LIMIT 1', (center_id,)).fetchone()
     history = conn.execute('SELECT t.ticket_number, s.service_name FROM queue_tokens t JOIN services s ON t.service_id = s.id WHERE t.center_id = ? AND t.status IN ("CALLED", "COMPLETED") ORDER BY t.called_at DESC LIMIT 5', (center_id,)).fetchall()
+    active_announcement = conn.execute('SELECT * FROM announcements WHERE is_active = 1 LIMIT 1').fetchone()
     conn.close()
     return jsonify({
         'current': dict(current) if current else None,
-        'history': [dict(h) for h in history]
+        'history': [dict(h) for h in history],
+        'active_announcement': dict(active_announcement) if active_announcement else None
     })
 
 # ==========================================
-# 3. جهاز سحب التذاكر (Kiosk)
+# 4. جهاز سحب التذاكر (Kiosk)
 # ==========================================
 @app.route('/kiosk/<int:center_id>')
 def kiosk_machine(center_id):
@@ -288,6 +436,7 @@ def kiosk_machine(center_id):
             {% for s in services %}
             <button onclick="issueTicket({{ s.id }})" style="display:block; width:100%; background:#3b82f6; color:#fff; padding:15px; margin:12px 0; border:none; border-radius:8px; font-weight:bold; font-size:16px; cursor:pointer;">{{ s.service_name }}</button>
             {% endfor %}
+            <div style="margin-top:15px;"><a href="/" style="color:#94a3b8; font-size:13px; text-decoration:none;">← العودة للرئيسية</a></div>
         </div>
         <div id="ticketModal" class="modal">
             <div class="ticket-card">
@@ -346,21 +495,19 @@ def api_issue_ticket(service_id):
     return jsonify({'success': True, 'ticket_number': ticket_number, 'service_name': service['service_name']})
 
 # ==========================================
-# 4. نافذة الموظف / العون (Employee Window)
+# 5. نافذة الموظف / العون (Employee Window)
 # ==========================================
-@app.route('/employee-window')
-def employee_window():
-    # للمعاينة السريعة بدون تعقيد تسجيل الدخول، سنقوم بتوجيهه افتراضياً للخدمة رقم 1 إن لم تكن الجلسة مفعلة
-    if not session.get('service_id'):
-        session['service_id'] = 1
-        session['role'] = 'employee'
+@app.route('/employee-interface')
+def employee_interface():
+    if session.get('role') != 'employee':
+        return redirect(url_for('employee_login'))
         
     conn = get_db_connection()
     service = conn.execute('SELECT * FROM services WHERE id = ?', (session['service_id'],)).fetchone()
     conn.close()
     
     if not service:
-        return "لا توجد مصلحة محددة، يرجى ضبط الجدول.", 400
+        return redirect(url_for('employee_login'))
 
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>عون النداء</title>
@@ -369,13 +516,14 @@ def employee_window():
             .container { width: 480px; background: #1e293b; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
             .ticket-box { font-size: 50px; color: #38bdf8; font-weight: bold; margin: 15px 0; background: #0f172a; padding: 15px; border-radius: 10px; border: 2px solid #334155; }
             button { width: 100%; padding: 14px; margin: 8px 0; font-size: 16px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: #fff; }
+            button:hover { opacity: 0.9; }
         </style></head>
         <body><div class="container">
         <h2>🖥 نافذة المصلحة: {{ service.service_name }}</h2>
         <div class="ticket-box" id="currentTicket">---</div>
         <button style="background: #10b981;" onclick="callNext()">📢 نداء التالية</button>
-        <button style="background: #3b82f6;" onclick="completeTicket()">✅ إنهاء التذكرة</button>
-        <br><a href="/logout" style="color:#f87171; display:inline-block; margin-top:15px; text-decoration:none;">خروج 🚪</a>
+        <button style="background: #3b82f6;" onclick="completeTicket()">✅ إنهاء التذكرة الحالية</button>
+        <br><a href="/logout" style="color:#f87171; display:inline-block; margin-top:15px; text-decoration:none; font-weight:bold;">تسجيل الخروج 🚪</a>
         </div>
         <script>
             function updateStatus() { 
@@ -385,7 +533,7 @@ def employee_window():
             }
             function callNext() { 
                 fetch('/api/call-next/{{ service.id }}', {method:'POST'}).then(res=>res.json()).then(data => {
-                    if(data.success) { updateStatus(); } else { alert('لا توجد تذاكر في الانتظار!'); }
+                    if(data.success) { updateStatus(); } else { alert('لا توجد تذاكر في الانتظار حالياً!'); }
                 }); 
             }
             function completeTicket() { 
