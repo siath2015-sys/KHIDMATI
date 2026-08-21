@@ -11,27 +11,23 @@ from flask import (
 import sqlite3
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key_here"  # استبدل هذا بمفتاح سري آمن
+app.secret_key = "tax_queue_secure_secret_key_2026"
 
 
 def get_db_connection():
-  # استخدام اسم قاعدة البيانات المخصص
   conn = sqlite3.connect("tax-queue-db")
   conn.row_factory = sqlite3.Row
   return conn
 
 
-# دالة تهيئة قاعدة البيانات الأساسية عند بدء التشغيل
 def init_db():
   conn = get_db_connection()
-  # جدول المراكز
   conn.execute("""
         CREATE TABLE IF NOT EXISTS centers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             center_name TEXT NOT NULL
         )
     """)
-  # جدول المصالح / الخدمات
   conn.execute("""
         CREATE TABLE IF NOT EXISTS services (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +36,6 @@ def init_db():
             FOREIGN KEY (center_id) REFERENCES centers (id)
         )
     """)
-  # جدول تذاكر الطابور
   conn.execute("""
         CREATE TABLE IF NOT EXISTS queue_tokens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,12 +52,25 @@ def init_db():
         )
     """)
   conn.commit()
+  # إدراج مركز افتراضي ومصلحة افتراضية إن لم تكن موجودة لتسهيل العمل فوراً
+  center_count = conn.execute("SELECT COUNT(*) FROM centers").fetchone()[0]
+  if center_count == 0:
+    conn.execute(
+        "INSERT INTO centers (center_name) VALUES (?)",
+        ("مركز الضرائب - ميلة الرئيسي",),
+    )
+    conn.execute(
+        "INSERT INTO services (center_id, service_name) VALUES (?, ?)",
+        (1, "مصلحة التمحيص والرقابة الجبائية"),
+    )
+    conn.commit()
   conn.close()
 
 
-# صفحة تسجيل الدخول
+# واجهة تسجيل الدخول الاحترافية التصميم
 @app.route("/login", methods=["GET", "POST"])
 def login():
+  error = None
   if request.method == "POST":
     role = request.form.get("role")
     session["role"] = role
@@ -74,21 +82,39 @@ def login():
       return redirect(url_for("employee_window"))
     elif role == "directorate":
       return redirect(url_for("dashboard_stats"))
+
   return render_template_string("""
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>تسجيل الدخول</title>
-        <style>body{background:#0f172a;color:#fff;font-family:Tahoma;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}
-        .box{background:#1e293b;padding:30px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.5);width:320px;text-align:center;}
-        select,button{width:100%;padding:12px;margin:10px 0;border-radius:8px;border:none;font-size:14px;}
-        button{background:#3b82f6;color:#fff;font-weight:bold;cursor:pointer;}</style></head>
-        <body><div class="box"><h2>تسجيل الدخول للنظام</h2>
-        <form method="POST">
-            <select name="role">
-                <option value="system_admin">مسؤول النظام (System Admin)</option>
-                <option value="employee">عون مصلحة (Employee)</option>
-                <option value="directorate">مديرية (Directorate)</option>
-            </select>
-            <button type="submit">دخول</button>
-        </form></div></body></html>
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>تسجيل الدخول - نظام إدارة الطابور الجبائي</title>
+        <style>
+            * { box-sizing: border-box; }
+            body { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); color: #fff; font-family: Tahoma, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .login-card { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(12px); padding: 40px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.6); width: 400px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+            .login-card h2 { margin-bottom: 25px; color: #f59e0b; font-size: 24px; font-weight: bold; }
+            .form-group { margin-bottom: 20px; text-align: right; }
+            .form-group label { display: block; margin-bottom: 8px; color: #94a3b8; font-size: 14px; }
+            select { width: 100%; padding: 14px; background: #0f172a; color: #fff; border: 2px solid #334155; border-radius: 10px; font-size: 15px; outline: none; transition: 0.3s; }
+            select:focus { border-color: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.3); }
+            button { width: 100%; padding: 14px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #fff; font-weight: bold; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; transition: 0.3s; margin-top: 10px; box-shadow: 0 4px 12px rgba(59,130,246,0.4); }
+            button:hover { transform: translateY(-2px); opacity: 0.95; }
+            .footer-text { margin-top: 20px; font-size: 12px; color: #64748b; }
+        </style></head>
+        <body>
+        <div class="login-card">
+            <h2>🏢 النظام الذكي لإدارة الطابور</h2>
+            <form method="POST">
+                <div class="form-group">
+                    <label>اختر صفة الدخول للنظام:</label>
+                    <select name="role">
+                        <option value="system_admin">🛠️ مسؤول النظام (System Admin)</option>
+                        <option value="employee">🖥️ عون مصلحة الاستقبال (Employee)</option>
+                        <option value="directorate">📊 إحصائيات وتقارير المديرية</option>
+                    </select>
+                </div>
+                <button type="submit">تسجيل الدخول 🚀</button>
+            </form>
+            <div class="footer-text">مديرية الضرائب لولاية ميلة © 2026</div>
+        </div>
+        </body></html>
     """)
 
 
@@ -109,14 +135,20 @@ def system_dashboard():
     return "غير مصرح لك بالوصول!", 403
   return render_template_string("""
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>لوحة تحكم النظام</title>
-        <style>body{background:#0f172a;color:#fff;font-family:Tahoma;padding:30px;text-align:center;}
-        a{display:inline-block;padding:12px 20px;margin:10px;background:#3b82f6;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;}
-        .logout{background:#ef4444;}</style></head>
+        <style>
+            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 40px; text-align: center; }
+            h1 { color: #f59e0b; margin-bottom: 30px; }
+            .menu-grid { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+            a { display: inline-block; padding: 20px 30px; background: #1e293b; border: 1px solid #334155; color: #38bdf8; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 18px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+            a:hover { background: #3b82f6; color: #fff; transform: translateY(-3px); }
+            .logout { background: #7f1d1d; color: #f87171; border-color: #991b1b; }
+            .logout:hover { background: #ef4444; color: #fff; }
+        </style></head>
         <body>
-        <h1>لوحة تحكم مسؤول النظام</h1>
-        <div>
-            <a href="/system/dashboard-stats">📊 إحصائيات المديرية</a>
-            <a href="/system/all-displays">🖥 مراقبة جميع الشاشات</a>
+        <h1>🛠️ لوحة تحكم مسؤول النظام المركزية</h1>
+        <div class="menu-grid">
+            <a href="/system/dashboard-stats">📊 إحصائيات وتقارير المديرية</a>
+            <a href="/system/all-displays">🖥️ مراقبة الشاشات اللحظية</a>
             <a href="/logout" class="logout">تسجيل الخروج 🚪</a>
         </div>
         </body></html>
@@ -136,11 +168,11 @@ def employee_window():
   ).fetchone()
   conn.close()
   if not service or not center:
-    return "لم يتم العثور على بيانات المصلحة أو المركز المرتبط بالجلسة.", 400
+    return "بيانات المصلحة غير موجودة", 400
 
   return render_template_string(
       """
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>عون النداء</title>
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>نافذة العون - {{ service.service_name }}</title>
         <script>
             window.addEventListener("pageshow", function (event) {
                 if (event.persisted) { window.location.reload(); }
@@ -148,18 +180,20 @@ def employee_window():
         </script>
         <style>
             body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .container { width: 480px; background: #1e293b; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-            .ticket-box { font-size: 50px; color: #38bdf8; font-weight: bold; margin: 15px 0; background: #0f172a; padding: 15px; border-radius: 10px; border: 2px solid #334155; }
-            button { width: 100%; padding: 14px; margin: 8px 0; font-size: 16px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: #fff; transition: 0.2s; }
-            button:hover { opacity: 0.9; }
-            .alert-box { padding: 10px; border-radius: 6px; margin-bottom: 15px; font-weight: bold; font-size: 14px; display: none; }
+            .container { width: 500px; background: #1e293b; padding: 35px; border-radius: 20px; text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.5); border: 1px solid #334155; }
+            h2 { color: #f59e0b; margin-top: 0; font-size: 20px; }
+            .ticket-box { font-size: 60px; color: #38bdf8; font-weight: bold; margin: 20px 0; background: #0f172a; padding: 20px; border-radius: 15px; border: 2px solid #475569; letter-spacing: 2px; }
+            button { width: 100%; padding: 15px; margin: 10px 0; font-size: 16px; font-weight: bold; border: none; border-radius: 10px; cursor: pointer; color: #fff; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+            button:hover { opacity: 0.9; transform: translateY(-1px); }
+            .alert-box { padding: 12px; border-radius: 8px; margin-bottom: 15px; font-weight: bold; font-size: 14px; display: none; }
         </style></head>
         <body><div class="container">
-        <h2>🖥 نافذة المصلحة: {{ service.service_name }}</h2>
+        <h2>🖥️ نافذة المصلحة: {{ service.service_name }}</h2>
         <div id="alertBox" class="alert-box"></div>
+        <div style="font-size: 13px; color: #94a3b8;">رقم التذكرة الحالية قيد المعالجة</div>
         <div class="ticket-box" id="currentTicket">---</div>
-        <button style="background: #10b981;" onclick="callNext()">📢 نداء التالية</button>
-        <button style="background: #f59e0b; color: #000;" onclick="recallCurrent()">🔊 إعادة النداء</button>
+        <button style="background: #10b981;" onclick="callNext()">📢 نداء التذكرة التالية</button>
+        <button style="background: #f59e0b; color: #000;" onclick="recallCurrent()">🔊 إعادة النداء الصوتي</button>
         <button style="background: #3b82f6;" onclick="completeTicket()">✅ إنهاء التذكرة الحالية</button>
         <br><a href="/logout" style="color:#f87171; display:inline-block; margin-top:15px; font-weight:bold; text-decoration:none;">تسجيل الخروج 🚪</a>
         </div>
@@ -313,25 +347,25 @@ def dashboard_stats():
         <style>
             body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; margin: 0; }
             .container { max-width: 1200px; margin: auto; }
-            .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: #1e293b; padding: 15px 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-            .top-bar h2 { margin: 0; font-size: 20px; color: #fff; }
+            .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: #1e293b; padding: 15px 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid #334155; }
+            .top-bar h2 { margin: 0; font-size: 20px; color: #f59e0b; }
             .logout-btn, .back-btn { background: #ef4444; color: #fff; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
             .back-btn { background: #3b82f6; }
-            .filter-box { background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+            .filter-box { background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; border: 1px solid #334155; }
             .filter-box input { padding: 10px; background: #0f172a; color: #fff; border: 1px solid #475569; border-radius: 8px; }
             .btn { padding: 10px 20px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; text-decoration: none; }
-            .table-container { background: #1e293b; padding: 25px; border-radius: 12px; margin-bottom: 20px; }
+            .table-container { background: #1e293b; padding: 25px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #334155; }
             table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #0f172a; border-radius: 8px; overflow: hidden; }
             th, td { padding: 14px; text-align: center; border-bottom: 1px solid #334155; font-size: 14px; } 
             th { color: #f59e0b; background: #1e293b; }
             .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
-            .chart-card { background: #1e293b; padding: 20px; border-radius: 12px; }
+            .chart-card { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; }
         </style>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         </head>
         <body><div class="container">
         <div class="top-bar">
-            <h2>📊 لوحة القيادة وإحصائيات المراكز</h2>
+            <h2>📊 لوحة القيادة وإحصائيات المراكز الجبائية</h2>
             <div>
                 {% if session.get('role') == 'system_admin' %}
                     <a href="/system-dashboard" class="back-btn">⬅️ العودة للوحة التحكم</a>
@@ -404,20 +438,20 @@ def system_all_displays():
       """
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>مراقبة شاشات كل المراكز</title>
         <style>
-            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; margin: 0; }
-            .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #1e293b; padding: 15px 20px; border-radius: 10px; }
+            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 25px; margin: 0; }
+            .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: #1e293b; padding: 15px 25px; border-radius: 12px; border: 1px solid #334155; }
             .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
-            .center-card { background: #1e293b; border-radius: 12px; padding: 15px; border: 1px solid #334155; }
-            .center-title { font-size: 18px; font-weight: bold; color: #f59e0b; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-            .current-box { background: #0f172a; padding: 10px; border-radius: 8px; text-align: center; border: 1px solid #475569; margin-bottom: 10px; }
-            .ticket-num { font-size: 35px; color: #10b981; font-weight: bold; margin: 5px 0; }
+            .center-card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+            .center-title { font-size: 18px; font-weight: bold; color: #f59e0b; margin-bottom: 15px; border-bottom: 1px solid #334155; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+            .current-box { background: #0f172a; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #475569; margin-bottom: 15px; }
+            .ticket-num { font-size: 40px; color: #10b981; font-weight: bold; margin: 8px 0; }
             .service-name { font-size: 14px; color: #38bdf8; }
-            .btn { padding: 5px 10px; background: #3b82f6; color: #fff; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; font-size: 12px; }
+            .btn { padding: 6px 12px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; font-size: 12px; font-weight: bold; }
             .back-link { color: #f87171; text-decoration: none; font-weight: bold; }
         </style></head>
         <body>
         <div class="header">
-            <h2>🖥️ مراقبة شاشات العرض لجميع المراكز</h2>
+            <h2>🖥️ مراقبة شاشات العرض المباشرة لجميع المراكز</h2>
             <a href="/system-dashboard" class="back-link">العودة لوحة التحكم 🔙</a>
         </div>
         <div class="grid">
@@ -497,10 +531,12 @@ def display_screen(center_id):
   return render_template_string(
       """
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>شاشة العرض - {{ center.center_name }}</title>
-        <style>body{background:#000;color:#fff;font-family:Tahoma;text-align:center;padding:50px;}
-        h1{color:#f59e0b;font-size:40px;}
-        .big-ticket{font-size:120px;color:#10b981;font-weight:bold;background:#111;padding:30px;border-radius:20px;border:4px solid #333;margin:30px auto;width:600px;}
-        .service{font-size:35px;color:#38bdf8;}</style></head>
+        <style>
+            body { background: #000; color: #fff; font-family: Tahoma; text-align: center; padding: 40px; margin: 0; }
+            h1 { color: #f59e0b; font-size: 45px; margin-bottom: 10px; }
+            .big-ticket { font-size: 130px; color: #10b981; font-weight: bold; background: #111; padding: 30px; border-radius: 25px; border: 4px solid #333; margin: 30px auto; width: 650px; box-shadow: 0 0 40px rgba(16,185,129,0.2); }
+            .service { font-size: 40px; color: #38bdf8; margin-top: 20px; font-weight: bold; }
+        </style></head>
         <body>
             <h1>🏢 {{ center.center_name }}</h1>
             <div class="service" id="serviceName">جاري الانتظار...</div>
@@ -512,7 +548,8 @@ def display_screen(center_id):
                     .then(res => res.json())
                     .then(data => {
                         if(data.current) {
-                            document.getElementById('displayTicket').innerText = data.current.ticket_number;
+                            let curr = data.current.ticket_number;
+                            document.getElementById('displayTicket').innerText = curr;
                             document.getElementById('serviceName').innerText = data.current.service_name;
                         } else {
                             document.getElementById('displayTicket').innerText = '---';
@@ -526,40 +563,6 @@ def display_screen(center_id):
     """,
       center=center,
   )
-
-
-@app.route("/api/reset-tickets/<int:center_id>", methods=["POST"])
-def reset_tickets(center_id):
-  data = request.get_json(silent=True) or {}
-  reset_type = data.get("type", "daily")
-
-  conn = get_db_connection()
-  try:
-    if reset_type == "full":
-      conn.execute("DELETE FROM queue_tokens WHERE center_id = ?", (center_id,))
-      message = "تم تنفيذ التصفير الكلي لجميع تذاكر المركز بنجاح."
-    else:
-      today_str = datetime.now().strftime("%Y-%m-%d")
-      conn.execute(
-          """
-                DELETE FROM queue_tokens 
-                WHERE center_id = ? 
-                AND DATE(created_at) = ?
-            """,
-          (center_id, today_str),
-      )
-      message = f"تم تصفير طابور اليوم ({today_str}) للمركز بنجاح."
-
-    conn.commit()
-    success = True
-  except Exception as e:
-    conn.rollback()
-    success = False
-    message = f"حدث خطأ أثناء عملية التصفير: {str(e)}"
-  finally:
-    conn.close()
-
-  return jsonify({"success": success, "message": message})
 
 
 if __name__ == "__main__":
