@@ -263,17 +263,78 @@ def login():
 
 
 # --- لوحة تحكم مسؤول النظام ---
-@app.route("/system-dashboard")
+@app.route('/system-dashboard', methods=['GET', 'POST'])
 def system_dashboard():
-  if session.get("role") != "system_admin":
-    return "غير مصرح لك بالوصول!", 403
-  return render_template_string("""
+    if session.get('role') != 'system_admin':
+        return "غير مصرح لك بالوصول إلى لوحة تحكم المسؤول!", 403
+
+    conn = get_db_connection()
+       
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'add_center':
+            c_name = request.form.get('center_name')
+            if c_name: conn.execute('INSERT INTO centers (center_name) VALUES (?)', (c_name,)); conn.commit()
+        elif action == 'edit_center':
+            c_id, c_name = request.form.get('center_id'), request.form.get('center_name')
+            if c_id and c_name: conn.execute('UPDATE centers SET center_name = ? WHERE id = ?', (c_name, c_id)); conn.commit()
+        elif action == 'delete_center':
+            conn.execute('DELETE FROM centers WHERE id = ?', (request.form.get('center_id'),)); conn.commit()
+            
+        elif action == 'add_service':
+            c_id, s_name = request.form.get('center_id'), request.form.get('service_name')
+            if c_id and s_name: conn.execute('INSERT INTO services (center_id, service_name) VALUES (?, ?)', (c_id, s_name)); conn.commit()
+        elif action == 'edit_service':
+            s_id, s_name = request.form.get('service_id'), request.form.get('service_name')
+            if s_id and s_name: conn.execute('UPDATE services SET service_name = ? WHERE id = ?', (s_name, s_id)); conn.commit()
+        elif action == 'delete_service':
+            conn.execute('DELETE FROM services WHERE id = ?', (request.form.get('service_id'),)); conn.commit()
+            
+        elif action == 'add_user':
+            uname, pwd, role = request.form.get('username'), request.form.get('password'), request.form.get('role')
+            c_id, s_id = request.form.get('center_id') or None, request.form.get('service_id') or None
+            if uname and pwd and role:
+                try: conn.execute('INSERT INTO users (username, password, role, center_id, service_id) VALUES (?, ?, ?, ?, ?)', (uname, pwd, role, c_id, s_id)); conn.commit()
+                except: pass
+        elif action == 'delete_user':
+            conn.execute('DELETE FROM users WHERE id = ?', (request.form.get('user_id'),)); conn.commit()
+            
+        elif action == 'add_video':
+            v_title, v_url = request.form.get('title'), request.form.get('url')
+            if v_title and v_url: conn.execute('INSERT INTO videos (title, url, is_active) VALUES (?, ?, 0)', (v_title, v_url)); conn.commit()
+        elif action == 'delete_video':
+            conn.execute('DELETE FROM videos WHERE id = ?', (request.form.get('video_id'),)); conn.commit()
+        elif action == 'set_active_video':
+            v_id = request.form.get('video_id')
+            conn.execute('UPDATE videos SET is_active = 0')
+            conn.execute('UPDATE videos SET is_active = 1 WHERE id = ?', (v_id,))
+            conn.commit()
+            
+        elif action == 'add_announcement':
+            content = request.form.get('content')
+            if content: conn.execute('INSERT INTO announcements (content, is_active) VALUES (?, 0)', (content,)); conn.commit()
+        elif action == 'delete_announcement':
+            conn.execute('DELETE FROM announcements WHERE id = ?', (request.form.get('announcement_id'),)); conn.commit()
+        elif action == 'set_active_announcement':
+            a_id = request.form.get('announcement_id')
+            conn.execute('UPDATE announcements SET is_active = 0')
+            conn.execute('UPDATE announcements SET is_active = 1 WHERE id = ?', (a_id,))
+            conn.commit()
+
+    centers = conn.execute('SELECT * FROM centers').fetchall()
+    services = conn.execute('SELECT s.*, c.center_name FROM services s JOIN centers c ON s.center_id = c.id').fetchall()
+    users = conn.execute('SELECT u.*, c.center_name, s.service_name FROM users u LEFT JOIN centers c ON u.center_id = c.id LEFT JOIN services s ON u.service_id = s.id').fetchall()
+    videos = conn.execute('SELECT * FROM videos').fetchall()
+    announcements = conn.execute('SELECT * FROM announcements').fetchall()
+    conn.close()
+
+    return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>لوحة تحكم المسؤول</title>
         <style>
             body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 40px; text-align: center; }
             h1 { color: #f59e0b; margin-bottom: 30px; }
             .menu-grid { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; max-width: 900px; margin: auto; }
-            a { display: inline-block; padding: 20px 25px; background: #1e293b; border: 1px solid #334155; color: #38bdf8; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 16px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 260px; }
+            a { display: inline-block; padding: 20px 25px; background: #1e293b; border: 1px solid #334155; color: #38bdf8; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 16px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 260px; box-sizing: border-box; }
             a:hover { background: #3b82f6; color: #fff; transform: translateY(-3px); }
             .logout { background: #7f1d1d; color: #f87171; border-color: #991b1b; }
             .logout:hover { background: #ef4444; color: #fff; }
@@ -288,10 +349,101 @@ def system_dashboard():
             <a href="/logout" class="logout">تسجيل الخروج 🚪</a>
         </div>
         </body></html>
-    """)
+    ''')
 
+@app.route('/directorate-dashboard')
+def directorate_dashboard():
+    if session.get('role') != 'directorate':
+        return "غير مصرح لك بالوصول!", 403
+    return redirect('/system/dashboard-stats')
 
-# --- جهاز سحب التذاكر (Kiosk) للمكلفين ---
+@app.route('/center-dashboard')
+def center_dashboard():
+    if session.get('role') != 'center_admin': 
+        return "غير مصرح لك!", 403
+    center_id = session.get('center_id')
+    
+    conn = get_db_connection()
+    center = conn.execute('SELECT * FROM centers WHERE id = ?', (center_id,)).fetchone()
+    services = conn.execute('SELECT * FROM services WHERE center_id = ?', (center_id,)).fetchall()
+    total_tokens = conn.execute('SELECT COUNT(*) as cnt FROM queue_tokens WHERE center_id = ?', (center_id,)).fetchone()['cnt']
+    completed_tokens = conn.execute('SELECT COUNT(*) as cnt FROM queue_tokens WHERE center_id = ? AND status = "COMPLETED"', (center_id,)).fetchone()['cnt']
+    waiting_tokens = conn.execute('SELECT COUNT(*) as cnt FROM queue_tokens WHERE center_id = ? AND status = "WAITING"', (center_id,)).fetchone()['cnt']
+    
+    metrics = conn.execute('''
+        SELECT 
+            s.service_name,
+            COUNT(t.id) as total_served,
+            ROUND(AVG((JULIANDAY(t.called_at) - JULIANDAY(t.created_at)) * 24 * 60), 1) as avg_waiting_minutes,
+            ROUND(AVG((JULIANDAY(t.completed_at) - JULIANDAY(t.called_at)) * 24 * 60), 1) as avg_service_minutes
+        FROM services s
+        LEFT JOIN queue_tokens t ON s.id = t.service_id AND t.status = 'COMPLETED'
+        WHERE s.center_id = ?
+        GROUP BY s.id, s.service_name
+    ''', (center_id,)).fetchall()
+    
+    conn.close()
+    center_name = center['center_name'] if center else 'غير متوفر'
+
+    return render_template_string('''
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>لوحة تحكم المركز</title>
+        <script>
+            window.addEventListener("pageshow", function (event) {
+                if (event.persisted) { window.location.reload(); }
+            });
+        </script>
+        <style>
+            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; margin: 0; }
+            .container { max-width: 1000px; margin: auto; }
+            .card { background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
+            .stat-card { background: #1e293b; padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #334155; }
+            .stat-num { font-size: 30px; font-weight: bold; color: #38bdf8; margin-top: 5px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #0f172a; }
+            th, td { padding: 12px; text-align: center; border-bottom: 1px solid #334155; font-size: 14px; } th { color: #f59e0b; }
+            .logout { float: left; color: #f87171; text-decoration: none; font-weight: bold; }
+            .btn { padding: 6px 12px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; font-size: 13px; }
+        </style></head>
+        <body><div class="container">
+        <a href="/logout" class="logout">تسجيل الخروج 🚪</a>
+        <h2>🏢 لوحة تحكم المركز: {{ center_name }}</h2>
+        <div class="stats-grid">
+            <div class="stat-card"><div>إجمالي التذاكر</div><div class="stat-num">{{ total_tokens }}</div></div>
+            <div class="stat-card"><div>التذاكر المنجزة</div><div class="stat-num" style="color:#10b981;">{{ completed_tokens }}</div></div>
+            <div class="stat-card"><div>في الانتظار</div><div class="stat-num" style="color:#f59e0b;">{{ waiting_tokens }}</div></div>
+        </div>
+        
+        <div class="card">
+            <h3>⏱️ متوسط الأوقات المستغرفة لكل مصلحة (بالدقائق)</h3>
+            <table>
+                <tr><th>اسم المصلحة</th><th>التذاكر المنجزة</th><th>متوسط وقت الانتظار</th><th>متوسط زمن الخدمة</th></tr>
+                {% for m in metrics %}
+                <tr>
+                    <td><b>{{ m.service_name }}</b></td>
+                    <td style="color: #10b981;">{{ m.total_served or 0 }}</td>
+                    <td style="color: #f59e0b;">{{ m.avg_waiting_minutes if m.avg_waiting_minutes is not none else '---' }} دقيقة</td>
+                    <td style="color: #38bdf8;">{{ m.avg_service_minutes if m.avg_service_minutes is not none else '---' }} دقيقة</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>📌 المصالح التابعة للمركز</h3>
+            <table>
+                <tr><th>رقم المصلحة</th><th>اسم المصلحة</th><th>إجراء</th></tr>
+                {% for s in services %}
+                <tr><td>{{ s.id }}</td><td><b>{{ s.service_name }}</b></td><td><a href="/kiosk/{{ center_id }}" target="_blank" class="btn" style="background:#10b981;">جهاز سحب التذاكر 🎫</a></td></tr>
+                {% endfor %}
+            </table>
+        </div>
+        {% if center_id %}
+        <div class="card" style="text-align: center;">
+            <h3>🖥️ شاشة العرض الخاصة بالمركز</h3>
+            <a href="/display/{{ center_id }}" target="_blank" class="btn" style="padding: 10px 20px; font-size: 16px; background: #f59e0b; color: #000; font-weight: bold;">فتح شاشة العرض للمركز 🖥️</a>
+        </div>
+        {% endif %}</div></body></html>
+    ''', center_name=center_name, center_id=center_id, services=services, total_tokens=total_tokens, completed_tokens=completed_tokens, waiting_tokens=waiting_tokens, metrics=metrics)
 @app.route("/kiosk/<int:center_id>")
 def kiosk_station(center_id):
   conn = get_db_connection()
