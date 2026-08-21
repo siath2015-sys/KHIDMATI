@@ -15,8 +15,7 @@ app = Flask(__name__)
 app.secret_key = 'tax_queue_system_secret_key_2026'
 
 def get_db_connection():
-    # تغيير اسم ملف قاعدة البيانات هنا
-    conn = sqlite3.connect('tax-queue-db.db') 
+    conn = sqlite3.connect('tax-queue-db.db')
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -25,10 +24,8 @@ def init_db():
     conn.execute('CREATE TABLE IF NOT EXISTS centers (id INTEGER PRIMARY KEY AUTOINCREMENT, center_name TEXT NOT NULL)')
     conn.execute('CREATE TABLE IF NOT EXISTS services (id INTEGER PRIMARY KEY AUTOINCREMENT, center_id INTEGER, service_name TEXT NOT NULL, FOREIGN KEY (center_id) REFERENCES centers (id))')
     conn.execute('CREATE TABLE IF NOT EXISTS queue_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, center_id INTEGER, service_id INTEGER, ticket_number TEXT NOT NULL, status TEXT DEFAULT "WAITING", is_priority INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, called_at TIMESTAMP)')
-    conn.execute('CREATE TABLE IF NOT EXISTS videos (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL)')
     conn.execute('CREATE TABLE IF NOT EXISTS announcements (id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT NOT NULL, is_active INTEGER DEFAULT 1)')
     
-    # جدول المستخدمين لضمان تسجيل الدخول باسم المستخدم وكلمة المرور وصلاحيات دقيقة
     conn.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,20 +39,14 @@ def init_db():
         )
     ''')
     
-    # إدخال حسابات افتراضية للاختبار إذا كان الجدول فارغاً
     if conn.execute('SELECT COUNT(*) FROM users').fetchone()[0] == 0:
-        # مسؤول عام
         conn.execute('INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)', ('admin', 'admin123', 'system_admin'))
-        # مديرية
         conn.execute('INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)', ('directorate', 'dir123', 'directorate'))
         
-        # مركز ومصلحة افتراضية للاختبار
         conn.execute('INSERT OR IGNORE INTO centers (id, center_name) VALUES (1, ?)', ('المركز الجواري للضرائب - ميلة',))
         conn.execute('INSERT OR IGNORE INTO services (id, center_id, service_name) VALUES (1, 1, ?)', ('مصلحة الاستقبال والتسجيل',))
         
-        # مسؤول مركز
-        conn.execute('INSERT OR IGNORE INTO users (username, password, role, center_id) VALUES (?, ?, ?, ?)', ('manager_mila', 'man123', 'center_manager', 1))
-        # عون مصلحة
+        conn.execute('INSERT OR IGNORE INTO users (username, password, role, center_id) VALUES (?, ?, ?, ?)', ('manager_mila', 'man123', 'center_admin', 1))
         conn.execute('INSERT OR IGNORE INTO users (username, password, role, center_id, service_id) VALUES (?, ?, ?, ?, ?)', ('agent1', 'agent123', 'employee', 1, 1))
         
         conn.commit()
@@ -100,19 +91,16 @@ def home():
     ''', centers=centers)
 
 # ==========================================
-# 1. شاشة تسجيل الدخول الموحدة (User Name & Password)
+# 1. شاشة تسجيل الدخول الموحدة (التصميم المطلوب)
 # ==========================================
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
+        username, password = request.form['username'], request.form['password']
         conn = get_db_connection()
         user = conn.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password)).fetchone()
         conn.close()
-        
         if user:
             session['user_id'] = user['id']
             session['username'] = user['username']
@@ -120,47 +108,100 @@ def login():
             session['center_id'] = user['center_id']
             session['service_id'] = user['service_id']
             
-            # توجيه حسب الصلاحية
-            if user['role'] == 'system_admin':
-                return redirect(url_for('system_dashboard'))
-            elif user['role'] == 'directorate':
-                return redirect(url_for('directorate_dashboard'))
-            elif user['role'] == 'center_manager':
-                return redirect(url_for('center_manager_dashboard'))
-            elif user['role'] == 'employee':
-                return redirect(url_for('employee_interface'))
-        else:
-            error = 'اسم المستخدم أو كلمة المرور غير صحيحة!'
-
+            if user['role'] == 'system_admin': return redirect(url_for('system_dashboard'))
+            elif user['role'] == 'directorate': return redirect(url_for('directorate_dashboard'))
+            elif user['role'] == 'center_admin': return redirect(url_for('center_dashboard'))
+            elif user['role'] == 'employee': return redirect(url_for('employee_window'))
+        else: 
+            error = 'اسم المستخدم أو كلمة المرور غير صحيحة.'
+            
     return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>تسجيل الدخول للنظام</title>
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>الدخول إلى نظام التذاكر</title>
+        <script>
+            window.addEventListener("pageshow", function (event) {
+                if (event.persisted) { window.location.reload(); }
+            });
+        </script>
         <style>
-            body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .box { background: #1e293b; padding: 35px; border-radius: 15px; width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-            h2 { color: #38bdf8; text-align: center; margin-bottom: 20px; }
-            label { display: block; margin-top: 15px; font-size: 14px; color: #cbd5e1; }
-            input { width: 100%; padding: 12px; margin-top: 5px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 14px; box-sizing: border-box; }
-            button { width: 100%; background: #3b82f6; color: #fff; border: none; padding: 12px; margin-top: 25px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px; }
-            button:hover { background: #2563eb; }
-            .error { background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #f87171; padding: 10px; border-radius: 6px; text-align: center; margin-bottom: 15px; font-size: 13px; }
+            body { 
+                background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); 
+                color: #1e293b; 
+                font-family: Tahoma; 
+                display: flex; 
+                flex-direction: column; 
+                justify-content: space-between; 
+                align-items: center; 
+                height: 100vh; 
+                margin: 0; 
+                padding: 20px; 
+                box-sizing: border-box; 
+            }
+            .login-container { display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; width: 100%; }
+            .card { 
+                background: #ffffff; 
+                padding: 35px; 
+                border-radius: 15px; 
+                width: 100%; 
+                max-width: 420px; 
+                text-align: center; 
+                box-shadow: 0 15px 35px rgba(0,0,0,0.3); 
+                border: 1px solid #e2e8f0; 
+            }
+            .logo-img { height: 75px; object-fit: contain; margin-bottom: 15px; }
+            input { 
+                width: 92%; 
+                padding: 14px; 
+                margin: 10px 0; 
+                border-radius: 8px; 
+                border: 1px solid #cbd5e1; 
+                background: #f8fafc; 
+                color: #0f172a; 
+                font-size: 15px; 
+                box-sizing: border-box; 
+            }
+            input:focus { border-color: #3b82f6; outline: none; background: #fff; }
+            button { 
+                width: 92%; 
+                padding: 14px; 
+                background: #2563eb; 
+                color: #fff; 
+                border: none; 
+                border-radius: 8px; 
+                font-weight: bold; 
+                font-size: 16px; 
+                cursor: pointer; 
+                margin-top: 10px; 
+                transition: 0.2s; 
+            }
+            button:hover { background: #1d4ed8; }
+            .footer-signature { text-align: center; color: #cbd5e1; font-size: 13px; line-height: 1.6; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); width: 100%; max-width: 600px; }
         </style></head>
+        
         <body>
-        <div class="box">
-            <h2>🔐 تسجيل الدخول</h2>
-            {% if error %}<div class="error">{{ error }}</div>{% endif %}
-            <form method="POST">
-                <label>اسم المستخدم (Username):</label>
-                <input type="text" name="username" placeholder="أدخل اسم المستخدم" required>
+        <div></div>
+        
+        <div class="login-container">
+            <div class="card">
+                <img src="/static/header_logo.png" alt="شعار المديرية العامة للضرائب" class="logo-img" onerror="this.src='https://i.ibb.co/6y4G894/header-logo.png'">
+                <h3 style="margin-top: 5px; margin-bottom: 20px; color: #1e293b; font-size: 20px;">الدخول إلى نظام التذاكر</h3>
                 
-                <label>كلمة المرور (Password):</label>
-                <input type="password" name="password" placeholder="أدخل كلمة المرور" required>
+                {% if error %}<div style="color:#ef4444; background:rgba(239,68,68,0.1); padding:10px; border-radius:6px; margin-bottom:15px; font-weight:bold; font-size: 14px;">{{ error }}</div>{% endif %}
                 
-                <button type="submit">دخول</button>
-            </form>
-            <div style="text-align: center; margin-top: 20px;"><a href="/" style="color:#94a3b8; font-size:13px; text-decoration:none;">← العودة للرئيسية</a></div>
+                <form method="POST">
+                    <input type="text" name="username" placeholder="اسم المستخدم" required autocomplete="off"><br>
+                    <input type="password" name="password" placeholder="كلمة المرور" required><br>
+                    <button type="submit">تسجيل الدخول</button>
+                </form>
+            </div>
         </div>
+
+        <div class="footer-signature">
+            من إنجاز: <b>عتامنة الطاهر</b> - تقني سامي إعلام آلي<br>
+            المديرية الولائية للضرائب ميلة
+        </div>
+        
         </body></html>
-    ''')
+    ''', error=error)
 
 @app.route('/logout')
 def logout():
@@ -208,7 +249,6 @@ def system_dashboard():
             .section { background: #334155; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
             input, select { width: 100%; padding: 10px; margin-top: 8px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; box-sizing: border-box; }
             button { background: #10b981; color: #fff; border: none; padding: 10px 20px; margin-top: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-            button:hover { background: #059669; }
             table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #0f172a; border-radius: 6px; overflow: hidden; }
             th, td { padding: 10px; text-align: center; border-bottom: 1px solid #334155; font-size: 13px; }
             th { color: #f59e0b; }
@@ -217,8 +257,7 @@ def system_dashboard():
         <div class="container">
             <h2>⚙️ لوحة تحكم مسؤول النظام (System Admin)</h2>
             <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                <a href="/system/dashboard-stats" class="btn" style="background:#3b82f6; text-decoration:none; padding:10px 15px; border-radius:6px; font-weight:bold;">📊 إحصائيات المديرية العامة</a>
-                <a href="/system/all-displays" class="btn" style="background:#8b5cf6; text-decoration:none; padding:10px 15px; border-radius:6px; font-weight:bold;">🖥️ مراقبة كل الشاشات</a>
+                <a href="/directorate-dashboard" style="background:#3b82f6; text-decoration:none; padding:10px 15px; border-radius:6px; font-weight:bold; color:#fff;">📊 إحصائيات المديرية العامة</a>
                 <a href="/logout" style="background:#ef4444; color:#fff; padding:10px 15px; border-radius:6px; text-decoration:none; font-weight:bold; margin-right:auto;">تسجيل الخروج 🚪</a>
             </div>
 
@@ -232,7 +271,7 @@ def system_dashboard():
             </div>
 
             <div class="section">
-                <h3>👤 إضافة مستخدم جديد (مدير مركز، عون، مديرية...)</h3>
+                <h3>👤 إضافة مستخدم جديد</h3>
                 <form method="POST">
                     <input type="hidden" name="action" value="add_user">
                     <input type="text" name="username" placeholder="اسم المستخدم" required>
@@ -240,8 +279,8 @@ def system_dashboard():
                     <select name="role">
                         <option value="system_admin">مسؤول نظام (System Admin)</option>
                         <option value="directorate">مديرية (Directorate)</option>
-                        <option value="center_manager">مسؤول مركز (Center Manager)</option>
-                        <option value="employee">عون مصلحة (Employee)</option>
+                        <option value="center_admin">مسؤول مركز (center_admin)</option>
+                        <option value="employee">عون مصلحة (employee)</option>
                     </select>
                     <select name="center_id">
                         <option value="">-- اختر المركز (اختياري) --</option>
@@ -271,16 +310,10 @@ def system_dashboard():
     ''', centers=centers, users=users)
 
 # ==========================================
-# 3. شاشة إحصائيات المديرية العامة (Directorate Dashboard)
+# 3. شاشة إحصائيات المديرية العامة (Directorate)
 # ==========================================
-@app.route('/directorate-dashboard')
+@app.route('/directorate-dashboard', methods=['GET', 'POST'])
 def directorate_dashboard():
-    if session.get('role') != 'directorate':
-        return "غير مصرح لك بالوصول!", 403
-    return redirect('/system/dashboard-stats')
-
-@app.route('/system/dashboard-stats', methods=['GET', 'POST'])
-def dashboard_stats():
     if session.get('role') not in ['system_admin', 'directorate']:
         return "غير مصرح لك بالوصول!", 403
         
@@ -315,9 +348,8 @@ def dashboard_stats():
         <style>
             body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; margin: 0; }
             .container { max-width: 1200px; margin: auto; }
-            .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: #1e293b; padding: 15px 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-            .top-bar h2 { margin: 0; font-size: 20px; color: #fff; }
-            .logout-btn, .back-btn { background: #ef4444; color: #fff; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+            .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: #1e293b; padding: 15px 25px; border-radius: 12px; }
+            .logout-btn, .back-btn { background: #ef4444; color: #fff; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; }
             .back-btn { background: #3b82f6; }
             .filter-box { background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
             .filter-box input { padding: 10px; background: #0f172a; color: #fff; border: 1px solid #475569; border-radius: 8px; }
@@ -333,12 +365,12 @@ def dashboard_stats():
         </head>
         <body><div class="container">
         <div class="top-bar">
-            <h2>📊 لوحة القيادة وإحصائيات المديرية (Tableau de Bord)</h2>
+            <h2>📊 لوحة القيادة وإحصائيات المديرية</h2>
             <div>
                 {% if session.get('role') == 'system_admin' %}
                     <a href="/system-dashboard" class="back-btn">⬅️ العودة للوحة التحكم</a>
                 {% else %}
-                    <a href="/logout" class="logout-btn"><span>تسجيل الخروج</span> 🚪</a>
+                    <a href="/logout" class="logout-btn">تسجيل الخروج 🚪</a>
                 {% endif %}
             </div>
         </div>
@@ -347,7 +379,7 @@ def dashboard_stats():
             <span>من تاريخ: <input type="date" name="start_date" value="{{ start_date }}"></span>
             <span>إلى تاريخ: <input type="date" name="end_date" value="{{ end_date }}"></span>
             <button type="submit" class="btn">تصفية الإحصائيات 🔍</button>
-            <a href="/system/dashboard-stats" class="btn" style="background: #64748b;">إعادة تعيين</a>
+            <a href="/directorate-dashboard" class="btn" style="background: #64748b;">إعادة تعيين</a>
         </form>
 
         <div class="table-container">
@@ -393,11 +425,11 @@ def dashboard_stats():
     ''', stats=stats, start_date=start_date, end_date=end_date, centers_names=centers_names, total_counts=total_counts, served_counts=served_counts)
 
 # ==========================================
-# 4. لوحة تحكم مسؤول المركز (Center Manager Dashboard)
+# 4. لوحة تحكم مسؤول المركز (center_admin)
 # ==========================================
-@app.route('/center-manager', methods=['GET', 'POST'])
-def center_manager_dashboard():
-    if session.get('role') != 'center_manager' and session.get('role') != 'system_admin':
+@app.route('/center-dashboard', methods=['GET', 'POST'])
+def center_dashboard():
+    if session.get('role') != 'center_admin' and session.get('role') != 'system_admin':
         return "غير مصرح لك بالوصول!", 403
         
     center_id = session.get('center_id')
@@ -418,12 +450,11 @@ def center_manager_dashboard():
                 conn.execute('UPDATE announcements SET is_active = 0')
                 conn.execute('INSERT INTO announcements (content, is_active) VALUES (?, 1)', (content,))
                 conn.commit()
-        return redirect(url_for('center_manager_dashboard'))
+        return redirect(url_for('center_dashboard'))
 
     center = conn.execute('SELECT * FROM centers WHERE id = ?', (center_id,)).fetchone()
     services = conn.execute('SELECT * FROM services WHERE center_id = ?', (center_id,)).fetchall()
     
-    # إحصائيات خاصة بالمركز
     stats = conn.execute('''
         SELECT COUNT(t.id) as total,
                SUM(CASE WHEN t.status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
@@ -435,14 +466,14 @@ def center_manager_dashboard():
     conn.close()
 
     return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>إدارة المركز - {{ center.center_name }}</title>
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>إدارة المركز</title>
         <style>
             body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; }
             .container { max-width: 900px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
             h2 { color: #38bdf8; text-align: center; margin-bottom: 20px; }
             .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
             .stat-card { background: #334155; padding: 15px; border-radius: 8px; text-align: center; }
-            .stat-num { font-size: 24px; font-weight: bold; color: #10b981; margin-top: 5px; }
+            .stat-num { font-size: 24px; font-weight: bold; margin-top: 5px; }
             .section { background: #334155; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
             input { width: 100%; padding: 10px; margin-top: 8px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; box-sizing: border-box; }
             button { background: #10b981; color: #fff; border: none; padding: 10px 20px; margin-top: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; }
@@ -451,7 +482,7 @@ def center_manager_dashboard():
         </style></head>
         <body>
         <div class="container">
-            <h2>🏢 لوحة تحكم مسؤول المركز: {{ center.center_name }}</h2>
+            <h2>🏢 لوحة تحكم المركز: {{ center.center_name }}</h2>
             
             <div class="stats-grid">
                 <div class="stat-card"><div>إجمالي التذاكر</div><div class="stat-num" style="color:#38bdf8;">{{ stats.total or 0 }}</div></div>
@@ -460,15 +491,15 @@ def center_manager_dashboard():
             </div>
 
             <div class="links-row">
-                <a href="/display/{{ center.id }}" target="_blank" class="btn-link">📺 فتح شاشة العرض العامة</a>
-                <a href="/kiosk/{{ center.id }}" target="_blank" class="btn-link" style="background:#10b981;">🎫 فتح جهاز سحب التذاكر (Kiosk)</a>
+                <a href="/display/{{ center.id }}" target="_blank" class="btn-link">📺 شاشة العرض العامة</a>
+                <a href="/kiosk/{{ center.id }}" target="_blank" class="btn-link" style="background:#10b981;">🎫 جهاز سحب التذاكر (Kiosk)</a>
             </div>
 
             <div class="section" style="margin-top:20px;">
                 <h3>📌 إضافة مصلحة جديدة بالمركز</h3>
                 <form method="POST">
                     <input type="hidden" name="action" value="add_service">
-                    <input type="text" name="service_name" placeholder="اسم المصلحة (مثال: مصلحة الجباية)" required>
+                    <input type="text" name="service_name" placeholder="اسم المصلحة" required>
                     <button type="submit">إضافة المصلحة</button>
                 </form>
             </div>
@@ -490,7 +521,7 @@ def center_manager_dashboard():
     ''', center=center, services=services, stats=stats, announcement=announcement)
 
 # ==========================================
-# 5. شاشة العرض العامة (Display Screen)
+# 5. شاشة العرض العامة (Display)
 # ==========================================
 @app.route('/display/<int:center_id>')
 def display_screen(center_id):
@@ -654,10 +685,10 @@ def api_issue_ticket(service_id):
     return jsonify({'success': True, 'ticket_number': ticket_number, 'service_name': service['service_name']})
 
 # ==========================================
-# 7. شاشة النداء (Employee Interface)
+# 7. شاشة النداء (employee_window)
 # ==========================================
-@app.route('/employee-interface')
-def employee_interface():
+@app.route('/employee-window')
+def employee_window():
     if session.get('role') != 'employee':
         return redirect(url_for('login'))
         
@@ -667,7 +698,7 @@ def employee_interface():
     if not service: return redirect(url_for('login'))
 
     return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>عون النداء</title>
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>نافذة العون</title>
         <style>
             body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
             .container { width: 450px; background: #1e293b; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
@@ -727,67 +758,6 @@ def api_complete_ticket(service_id):
     conn.commit()
     conn.close()
     return jsonify({'success': True})
-
-# ==========================================
-# 8. مراقبة شاشات كل المراكز (System Admin)
-# ==========================================
-@app.route('/system/all-displays')
-def system_all_displays():
-    if session.get('role') != 'system_admin':
-        return "غير مصرح لك بالوصول!", 403
-    conn = get_db_connection()
-    centers = conn.execute('SELECT * FROM centers').fetchall()
-    conn.close()
-    return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>مراقبة شاشات كل المراكز</title>
-        <style>
-            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; }
-            .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #1e293b; padding: 15px 20px; border-radius: 10px; }
-            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
-            .center-card { background: #1e293b; border-radius: 12px; padding: 15px; border: 1px solid #334155; }
-            .center-title { font-size: 18px; font-weight: bold; color: #f59e0b; margin-bottom: 10px; display: flex; justify-content: space-between; }
-            .current-box { background: #0f172a; padding: 10px; border-radius: 8px; text-align: center; }
-            .ticket-num { font-size: 35px; color: #10b981; font-weight: bold; margin: 5px 0; }
-            .btn { padding: 5px 10px; background: #3b82f6; color: #fff; border-radius: 5px; text-decoration: none; font-size: 12px; }
-        </style></head>
-        <body>
-        <div class="header">
-            <h2>🖥️ مراقبة شاشات العرض لجميع المراكز</h2>
-            <a href="/system-dashboard" style="color: #f87171; text-decoration: none; font-weight: bold;">العودة لوحة التحكم 🔙</a>
-        </div>
-        <div class="grid">
-            {% for c in centers %}
-            <div class="center-card">
-                <div class="center-title">
-                    <span>🏢 {{ c.center_name }}</span>
-                    <a href="/display/{{ c.id }}" target="_blank" class="btn">الشاشة الكاملة ↗</a>
-                </div>
-                <div class="current-box">
-                    <div style="font-size: 12px; color: #94a3b8;">التذكرة الحالية</div>
-                    <div class="ticket-num" id="t-{{ c.id }}">---</div>
-                    <div style="font-size: 14px; color: #38bdf8;" id="s-{{ c.id }}">بانتظار النداء...</div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        <script>
-            function updateAllDisplays() {
-                {% for c in centers %}
-                fetch('/api/display-data/{{ c.id }}').then(res => res.json()).then(data => {
-                    if(data.current) {
-                        document.getElementById('t-{{ c.id }}').innerText = data.current.ticket_number;
-                        document.getElementById('s-{{ c.id }}').innerText = data.current.service_name;
-                    } else {
-                        document.getElementById('t-{{ c.id }}').innerText = '---';
-                        document.getElementById('s-{{ c.id }}').innerText = 'لا توجد تذكرة نشطة';
-                    }
-                });
-                {% endfor %}
-            }
-            setInterval(updateAllDisplays, 3000); updateAllDisplays();
-        </script>
-        </body></html>
-    ''', centers=centers)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
