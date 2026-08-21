@@ -694,11 +694,6 @@ def dashboard_stats():
         </div></body></html>
     ''', stats=stats, start_date=start_date, end_date=end_date, centers_names=centers_names, total_counts=total_counts, served_counts=served_counts)
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
-
 @app.route('/system/all-displays')
 def system_all_displays():
     if session.get('role') != 'system_admin':
