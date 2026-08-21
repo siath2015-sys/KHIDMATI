@@ -55,46 +55,10 @@ def init_db():
 init_db()
 
 # ==========================================
-# 0. الصفحة الرئيسية وتوجيه الدخول
+# 0. الصفحة الرئيسية (أصبحت شاشة الدخول مباشرة)
 # ==========================================
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def home():
-    conn = get_db_connection()
-    centers = conn.execute('SELECT * FROM centers').fetchall()
-    conn.close()
-    
-    return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>منظومة إدارة الطوابير</title>
-        <style>
-            body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .box { background: #1e293b; padding: 40px; border-radius: 20px; text-align: center; width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-            h2 { color: #38bdf8; margin-bottom: 20px; }
-            .btn { display: block; background: #3b82f6; color: #fff; padding: 12px; margin: 10px 0; border-radius: 8px; text-decoration: none; font-weight: bold; transition: 0.2s; }
-            .btn:hover { background: #2563eb; }
-            .btn-green { background: #10b981; }
-            .btn-green:hover { background: #059669; }
-        </style></head>
-        <body>
-        <div class="box">
-            <h2>🏢 مراكز الخدمات المتاحة</h2>
-            <p style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;">اختر المركز للانتقال إلى واجهة العرض أو سحب التذاكر</p>
-            {% for c in centers %}
-                <div style="background: #334155; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: right;">
-                    <div style="font-weight: bold; font-size: 16px; margin-bottom: 10px;">{{ c.center_name }}</div>
-                    <a class="btn" href="/display/{{ c.id }}">📺 شاشة العرض العامة</a>
-                    <a class="btn btn-green" href="/kiosk/{{ c.id }}">🎫 جهاز سحب التذاكر (Kiosk)</a>
-                </div>
-            {% endfor %}
-            <a href="/login" style="color: #cbd5e1; font-size: 13px; display: inline-block; margin-top: 15px; text-decoration: underline;">تسجيل دخول المستخدمين / المسؤولين</a>
-        </div>
-        </body></html>
-    ''', centers=centers)
-
-# ==========================================
-# 1. شاشة تسجيل الدخول الموحدة (التصميم المطلوب)
-# ==========================================
-@app.route('/login', methods=['GET', 'POST'])
-def login():
     error = None
     if request.method == 'POST':
         username, password = request.form['username'], request.form['password']
@@ -192,6 +156,10 @@ def login():
                     <input type="password" name="password" placeholder="كلمة المرور" required><br>
                     <button type="submit">تسجيل الدخول</button>
                 </form>
+                
+                <div style="margin-top: 15px;">
+                    <a href="/centers" style="color: #64748b; font-size: 13px; text-decoration: none;">الانتقال إلى واجهة المراكز (عرض وشاشات الكيوسك)</a>
+                </div>
             </div>
         </div>
 
@@ -203,10 +171,49 @@ def login():
         </body></html>
     ''', error=error)
 
+# مسار اختيار المراكز أصبح منفصلاً عبر الرابط /centers
+@app.route('/centers')
+def centers_page():
+    conn = get_db_connection()
+    centers = conn.execute('SELECT * FROM centers').fetchall()
+    conn.close()
+    
+    return render_template_string('''
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>منظومة إدارة الطوابير</title>
+        <style>
+            body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .box { background: #1e293b; padding: 40px; border-radius: 20px; text-align: center; width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+            h2 { color: #38bdf8; margin-bottom: 20px; }
+            .btn { display: block; background: #3b82f6; color: #fff; padding: 12px; margin: 10px 0; border-radius: 8px; text-decoration: none; font-weight: bold; transition: 0.2s; }
+            .btn:hover { background: #2563eb; }
+            .btn-green { background: #10b981; }
+            .btn-green:hover { background: #059669; }
+        </style></head>
+        <body>
+        <div class="box">
+            <h2>🏢 مراكز الخدمات المتاحة</h2>
+            <p style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;">اختر المركز للانتقال إلى واجهة العرض أو سحب التذاكر</p>
+            {% for c in centers %}
+                <div style="background: #334155; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: right;">
+                    <div style="font-weight: bold; font-size: 16px; margin-bottom: 10px;">{{ c.center_name }}</div>
+                    <a class="btn" href="/display/{{ c.id }}">📺 شاشة العرض العامة</a>
+                    <a class="btn btn-green" href="/kiosk/{{ c.id }}">🎫 جهاز سحب التذاكر (Kiosk)</a>
+                </div>
+            {% endfor %}
+            <a href="/" style="color: #cbd5e1; font-size: 13px; display: inline-block; margin-top: 15px; text-decoration: underline;">العودة إلى صفحة تسجيل الدخول</a>
+        </div>
+        </body></html>
+    ''', centers=centers)
+
+# مسار تسجيل الدخول القديم تم توجيهه ليطابق الرئيسية
+@app.route('/login')
+def login_redirect():
+    return redirect(url_for('home'))
+
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('login'))
+    return redirect(url_for('home'))
 
 # ==========================================
 # 2. لوحة تحكم المسؤول العام (System Admin)
@@ -631,6 +638,9 @@ def kiosk_machine(center_id):
             {% for s in services %}
             <button onclick="issueTicket({{ s.id }})" style="display:block; width:100%; background:#3b82f6; color:#fff; padding:15px; margin:12px 0; border:none; border-radius:8px; font-weight:bold; font-size:16px; cursor:pointer;">{{ s.service_name }}</button>
             {% endfor %}
+            <div style="margin-top: 20px;">
+                <a href="/centers" style="color: #94a3b8; font-size: 13px; text-decoration: none;">العودة لقائمة المراكز</a>
+            </div>
         </div>
         <div id="ticketModal" class="modal">
             <div class="ticket-card">
@@ -690,12 +700,12 @@ def api_issue_ticket(service_id):
 @app.route('/employee-window')
 def employee_window():
     if session.get('role') != 'employee':
-        return redirect(url_for('login'))
+        return redirect(url_for('home'))
         
     conn = get_db_connection()
     service = conn.execute('SELECT * FROM services WHERE id = ?', (session['service_id'],)).fetchone()
     conn.close()
-    if not service: return redirect(url_for('login'))
+    if not service: return redirect(url_for('home'))
 
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>نافذة العون</title>
