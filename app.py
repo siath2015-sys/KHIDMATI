@@ -1313,18 +1313,17 @@ def reset_tickets(center_id):
     finally:
         conn.close()
         
-    return jsonify({'success': success, 'message': message})
-    @app.route('/track/<int:center_id>')
+    return jsonify({'success': success, 'message': message})  
+    
+@app.route('/track/<int:center_id>')
 def track_page(center_id):
     conn = get_db_connection()
-    # جلب معلومات المركز ديناميكياً بناءً على الـ ID الموجود في الرابط
     center = conn.execute('SELECT * FROM centers WHERE id = ?', (center_id,)).fetchone()
     
     if not center:
         conn.close()
         return "<h2 style='text-align:center; font-family:Tahoma; margin-top:50px; color:#ef4444;'>عذراً، هذا المركز غير موجود.</h2>", 404
 
-    # جلب التذكرة الحالية قيد النداء لهذا المركز
     current_ticket = conn.execute('''
         SELECT t.*, s.service_name 
         FROM queue_tokens t 
@@ -1333,7 +1332,6 @@ def track_page(center_id):
         ORDER BY t.called_at DESC LIMIT 1
     ''', (center_id,)).fetchone()
 
-    # جلب آخر التذاكر المنجزة أو قائمة الانتظار المصغرة ليعلم المواطن دوره
     waiting_count = conn.execute('''
         SELECT COUNT(*) as cnt FROM queue_tokens 
         WHERE center_id = ? AND status = 'WAITING'
@@ -1341,7 +1339,6 @@ def track_page(center_id):
 
     conn.close()
 
-    # تصميم صفحة المتابعة التي ستفتح في هاتف المواطن
     return render_template_string('''
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
@@ -1349,7 +1346,7 @@ def track_page(center_id):
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>متابعة الدور - {{ center.center_name }}</title>
-            <meta http-equiv="refresh" content="10"> <!-- تحديث تلقائي للصفحة كل 10 ثواني -->
+            <meta http-equiv="refresh" content="10">
             <style>
                 body { background: #0f172a; color: #fff; font-family: 'Segoe UI', Tahoma; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; box-sizing: border-box; }
                 .card { background: #1e293b; padding: 25px; border-radius: 16px; text-align: center; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
@@ -1364,9 +1361,7 @@ def track_page(center_id):
         <body>
             <div class="card">
                 <div class="center-title">🏢 {{ center.center_name }}</div>
-                
                 <div style="font-size: 14px; color: #94a3b8;">التذكرة الحالية قيد النداء</div>
-                
                 <div class="ticket-box">
                     {% if current_ticket %}
                         <div class="ticket-num">{{ current_ticket.ticket_number }}</div>
@@ -1376,16 +1371,14 @@ def track_page(center_id):
                         <div class="service-name">لا توجد تذكرة منداءة حالياً</div>
                     {% endif %}
                 </div>
-
                 <div class="info-badge">
                     ⏳ عدد التذاكر في قائمة الانتظار حالياً: <span style="color: #fbbf24; font-size: 18px;">{{ waiting_count }}</span>
                 </div>
-
                 <div class="footer-note">تتحدث هذه الصفحة تلقائياً لمتابعة دورك بسلاسة.</div>
             </div>
         </body>
         </html>
-    ''', center=center, current_ticket=current_ticket, waiting_count=waiting_count)
+    ''', center=center, current_ticket=current_ticket, waiting_count=waiting_count)  
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
