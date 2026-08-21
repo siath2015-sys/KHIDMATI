@@ -24,7 +24,8 @@ def init_db():
     conn.execute('CREATE TABLE IF NOT EXISTS centers (id INTEGER PRIMARY KEY AUTOINCREMENT, center_name TEXT NOT NULL)')
     conn.execute('CREATE TABLE IF NOT EXISTS services (id INTEGER PRIMARY KEY AUTOINCREMENT, center_id INTEGER, service_name TEXT NOT NULL, FOREIGN KEY (center_id) REFERENCES centers (id))')
     conn.execute('CREATE TABLE IF NOT EXISTS queue_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, center_id INTEGER, service_id INTEGER, ticket_number TEXT NOT NULL, status TEXT DEFAULT "WAITING", is_priority INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, called_at TIMESTAMP)')
-    conn.execute('CREATE TABLE IF NOT EXISTS announcements (id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT NOT NULL, is_active INTEGER DEFAULT 1)')
+    conn.execute('CREATE TABLE IF NOT EXISTS announcements (id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT NOT NULL, is_active INTEGER DEFAULT 0)')
+    conn.execute('CREATE TABLE IF NOT EXISTS videos (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, url TEXT NOT NULL, is_active INTEGER DEFAULT 0)')
     
     conn.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -55,7 +56,7 @@ def init_db():
 init_db()
 
 # ==========================================
-# 0. الصفحة الرئيسية (أصبحت شاشة الدخول مباشرة)
+# 0. الصفحة الرئيسية (شاشة الدخول)
 # ==========================================
 @app.route('/', methods=['GET', 'POST'])
 def home():
@@ -81,118 +82,53 @@ def home():
             
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>الدخول إلى نظام التذاكر</title>
-        <script>
-            window.addEventListener("pageshow", function (event) {
-                if (event.persisted) { window.location.reload(); }
-            });
-        </script>
         <style>
-            body { 
-                background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); 
-                color: #1e293b; 
-                font-family: Tahoma; 
-                display: flex; 
-                flex-direction: column; 
-                justify-content: space-between; 
-                align-items: center; 
-                height: 100vh; 
-                margin: 0; 
-                padding: 20px; 
-                box-sizing: border-box; 
-            }
+            body { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); color: #1e293b; font-family: Tahoma; display: flex; flex-direction: column; justify-content: space-between; align-items: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
             .login-container { display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; width: 100%; }
-            .card { 
-                background: #ffffff; 
-                padding: 35px; 
-                border-radius: 15px; 
-                width: 100%; 
-                max-width: 420px; 
-                text-align: center; 
-                box-shadow: 0 15px 35px rgba(0,0,0,0.3); 
-                border: 1px solid #e2e8f0; 
-            }
-            .logo-img { height: 75px; object-fit: contain; margin-bottom: 15px; }
-            input { 
-                width: 92%; 
-                padding: 14px; 
-                margin: 10px 0; 
-                border-radius: 8px; 
-                border: 1px solid #cbd5e1; 
-                background: #f8fafc; 
-                color: #0f172a; 
-                font-size: 15px; 
-                box-sizing: border-box; 
-            }
-            input:focus { border-color: #3b82f6; outline: none; background: #fff; }
-            button { 
-                width: 92%; 
-                padding: 14px; 
-                background: #2563eb; 
-                color: #fff; 
-                border: none; 
-                border-radius: 8px; 
-                font-weight: bold; 
-                font-size: 16px; 
-                cursor: pointer; 
-                margin-top: 10px; 
-                transition: 0.2s; 
-            }
+            .card { background: #ffffff; padding: 35px; border-radius: 15px; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.3); border: 1px solid #e2e8f0; }
+            input { width: 92%; padding: 14px; margin: 10px 0; border-radius: 8px; border: 1px solid #cbd5e1; background: #f8fafc; color: #0f172a; font-size: 15px; box-sizing: border-box; }
+            button { width: 92%; padding: 14px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px; }
             button:hover { background: #1d4ed8; }
             .footer-signature { text-align: center; color: #cbd5e1; font-size: 13px; line-height: 1.6; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); width: 100%; max-width: 600px; }
         </style></head>
-        
         <body>
         <div></div>
-        
         <div class="login-container">
             <div class="card">
-                <img src="/static/header_logo.png" alt="شعار المديرية العامة للضرائب" class="logo-img" onerror="this.src='https://i.ibb.co/6y4G894/header-logo.png'">
                 <h3 style="margin-top: 5px; margin-bottom: 20px; color: #1e293b; font-size: 20px;">الدخول إلى نظام التذاكر</h3>
-                
                 {% if error %}<div style="color:#ef4444; background:rgba(239,68,68,0.1); padding:10px; border-radius:6px; margin-bottom:15px; font-weight:bold; font-size: 14px;">{{ error }}</div>{% endif %}
-                
                 <form method="POST">
                     <input type="text" name="username" placeholder="اسم المستخدم" required autocomplete="off"><br>
                     <input type="password" name="password" placeholder="كلمة المرور" required><br>
                     <button type="submit">تسجيل الدخول</button>
                 </form>
-                
                 <div style="margin-top: 15px;">
                     <a href="/centers" style="color: #64748b; font-size: 13px; text-decoration: none;">الانتقال إلى واجهة المراكز (عرض وشاشات الكيوسك)</a>
                 </div>
             </div>
         </div>
-
         <div class="footer-signature">
-            من إنجاز: <b>عتامنة الطاهر</b> - تقني سامي إعلام آلي<br>
-            المديرية الولائية للضرائب ميلة
+            من إنجاز: <b>عتامنة الطاهر</b> - تقني سامي إعلام آلي<br>المديرية الولائية للضرائب ميلة
         </div>
-        
         </body></html>
     ''', error=error)
 
-# مسار اختيار المراكز أصبح منفصلاً عبر الرابط /centers
 @app.route('/centers')
 def centers_page():
     conn = get_db_connection()
     centers = conn.execute('SELECT * FROM centers').fetchall()
     conn.close()
-    
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>منظومة إدارة الطوابير</title>
         <style>
             body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
             .box { background: #1e293b; padding: 40px; border-radius: 20px; text-align: center; width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-            h2 { color: #38bdf8; margin-bottom: 20px; }
-            .btn { display: block; background: #3b82f6; color: #fff; padding: 12px; margin: 10px 0; border-radius: 8px; text-decoration: none; font-weight: bold; transition: 0.2s; }
-            .btn:hover { background: #2563eb; }
+            .btn { display: block; background: #3b82f6; color: #fff; padding: 12px; margin: 10px 0; border-radius: 8px; text-decoration: none; font-weight: bold; }
             .btn-green { background: #10b981; }
-            .btn-green:hover { background: #059669; }
         </style></head>
         <body>
         <div class="box">
             <h2>🏢 مراكز الخدمات المتاحة</h2>
-            <p style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;">اختر المركز للانتقال إلى واجهة العرض أو سحب التذاكر</p>
             {% for c in centers %}
                 <div style="background: #334155; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: right;">
                     <div style="font-weight: bold; font-size: 16px; margin-bottom: 10px;">{{ c.center_name }}</div>
@@ -200,15 +136,10 @@ def centers_page():
                     <a class="btn btn-green" href="/kiosk/{{ c.id }}">🎫 جهاز سحب التذاكر (Kiosk)</a>
                 </div>
             {% endfor %}
-            <a href="/" style="color: #cbd5e1; font-size: 13px; display: inline-block; margin-top: 15px; text-decoration: underline;">العودة إلى صفحة تسجيل الدخول</a>
+            <a href="/" style="color: #cbd5e1; font-size: 13px; display: inline-block; margin-top: 15px;">العودة لصفحة تسجيل الدخول</a>
         </div>
         </body></html>
     ''', centers=centers)
-
-# مسار تسجيل الدخول القديم تم توجيهه ليطابق الرئيسية
-@app.route('/login')
-def login_redirect():
-    return redirect(url_for('home'))
 
 @app.route('/logout')
 def logout():
@@ -216,7 +147,7 @@ def logout():
     return redirect(url_for('home'))
 
 # ==========================================
-# 2. لوحة تحكم المسؤول العام (System Admin)
+# 1. لوحة تحكم المسؤول الشاملة (System Dashboard)
 # ==========================================
 @app.route('/system-dashboard', methods=['GET', 'POST'])
 def system_dashboard():
@@ -227,28 +158,22 @@ def system_dashboard():
 
     if request.method == 'POST':
         action = request.form.get('action')
-        
-        # استخدام try-except لضمان استقرار التطبيق
         try:
             if action == 'add_center':
                 c_name = request.form.get('center_name')
                 if c_name: conn.execute('INSERT INTO centers (center_name) VALUES (?)', (c_name,)); conn.commit()
-            
             elif action == 'edit_center':
                 c_id, c_name = request.form.get('center_id'), request.form.get('center_name')
                 if c_id and c_name: conn.execute('UPDATE centers SET center_name = ? WHERE id = ?', (c_name, c_id)); conn.commit()
-            
             elif action == 'delete_center':
                 conn.execute('DELETE FROM centers WHERE id = ?', (request.form.get('center_id'),)); conn.commit()
 
             elif action == 'add_service':
                 c_id, s_name = request.form.get('center_id'), request.form.get('service_name')
                 if c_id and s_name: conn.execute('INSERT INTO services (center_id, service_name) VALUES (?, ?)', (c_id, s_name)); conn.commit()
-            
             elif action == 'edit_service':
                 s_id, s_name = request.form.get('service_id'), request.form.get('service_name')
                 if s_id and s_name: conn.execute('UPDATE services SET service_name = ? WHERE id = ?', (s_name, s_id)); conn.commit()
-            
             elif action == 'delete_service':
                 conn.execute('DELETE FROM services WHERE id = ?', (request.form.get('service_id'),)); conn.commit()
 
@@ -258,17 +183,14 @@ def system_dashboard():
                 s_id = request.form.get('service_id') or None
                 if uname and pwd and role:
                     conn.execute('INSERT INTO users (username, password, role, center_id, service_id) VALUES (?, ?, ?, ?, ?)', (uname, pwd, role, c_id, s_id)); conn.commit()
-            
             elif action == 'delete_user':
                 conn.execute('DELETE FROM users WHERE id = ? AND role != "system_admin"', (request.form.get('user_id'),)); conn.commit()
 
             elif action == 'add_video':
                 v_title, v_url = request.form.get('title'), request.form.get('url')
                 if v_title and v_url: conn.execute('INSERT INTO videos (title, url, is_active) VALUES (?, ?, 0)', (v_title, v_url)); conn.commit()
-            
             elif action == 'delete_video':
                 conn.execute('DELETE FROM videos WHERE id = ?', (request.form.get('video_id'),)); conn.commit()
-            
             elif action == 'set_active_video':
                 v_id = request.form.get('video_id')
                 conn.execute('UPDATE videos SET is_active = 0')
@@ -278,10 +200,8 @@ def system_dashboard():
             elif action == 'add_announcement':
                 content = request.form.get('content')
                 if content: conn.execute('INSERT INTO announcements (content, is_active) VALUES (?, 0)', (content,)); conn.commit()
-            
             elif action == 'delete_announcement':
                 conn.execute('DELETE FROM announcements WHERE id = ?', (request.form.get('announcement_id'),)); conn.commit()
-            
             elif action == 'set_active_announcement':
                 a_id = request.form.get('announcement_id')
                 conn.execute('UPDATE announcements SET is_active = 0')
@@ -290,7 +210,6 @@ def system_dashboard():
         except Exception as e:
             print(f"Error: {e}")
 
-    # جلب البيانات
     centers = conn.execute('SELECT * FROM centers').fetchall()
     services = conn.execute('SELECT s.*, c.center_name FROM services s JOIN centers c ON s.center_id = c.id').fetchall()
     users = conn.execute('SELECT u.*, c.center_name, s.service_name FROM users u LEFT JOIN centers c ON u.center_id = c.id LEFT JOIN services s ON u.service_id = s.id').fetchall()
@@ -298,459 +217,209 @@ def system_dashboard():
     announcements = conn.execute('SELECT * FROM announcements').fetchall()
     conn.close()
 
-    return render_template_string('''... (استخدم نفس القالب مع إضافة `onsubmit="return confirm('هل أنت متأكد؟');"` داخل نماذج الحذف) ...''')
-# ==========================================
-# 3. شاشة إحصائيات المديرية العامة (Directorate)
-# ==========================================
-@app.route('/directorate-dashboard', methods=['GET', 'POST'])
-def directorate_dashboard():
-    if session.get('role') not in ['system_admin', 'directorate']:
-        return "غير مصرح لك بالوصول!", 403
-        
-    start_date = request.args.get('start_date', '')
-    end_date = request.args.get('end_date', '')
-
-    conn = get_db_connection()
-    query = '''
-        SELECT c.center_name, 
-               COUNT(t.id) as total_tickets,
-               SUM(CASE WHEN t.status = 'COMPLETED' OR t.status = 'CALLED' THEN 1 ELSE 0 END) as served_tickets,
-               SUM(CASE WHEN t.status = 'WAITING' THEN 1 ELSE 0 END) as waiting_tickets
-        FROM centers c
-        LEFT JOIN services s ON c.id = s.center_id
-        LEFT JOIN queue_tokens t ON s.id = t.service_id
-    '''
-    params = []
-    if start_date and end_date:
-        query += ' WHERE DATE(t.created_at) BETWEEN ? AND ?'
-        params.extend([start_date, end_date])
-        
-    query += ' GROUP BY c.id, c.center_name'
-    stats = conn.execute(query, params).fetchall()
-    conn.close()
-
-    centers_names = [row['center_name'] for row in stats]
-    total_counts = [row['total_tickets'] for row in stats]
-    served_counts = [row['served_tickets'] for row in stats]
-
     return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>لوحة إحصائيات المديرية</title>
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>لوحة التحكم الشاملة</title>
+        <script>
+            function confirmResetTickets(centerId, centerName) {
+                if (confirm('هل أنت متأكد من رغبة في تصفير وإعادة ضبط طابور المركز: ' + centerName + '؟')) {
+                    fetch('/api/reset-tickets/' + centerId, { method: 'POST', headers: {'Content-Type': 'application/json'} })
+                    .then(res => res.json()).then(data => { alert(data.message); location.reload(); });
+                }
+            }
+        </script>
         <style>
-            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; margin: 0; }
+            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; }
             .container { max-width: 1200px; margin: auto; }
-            .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: #1e293b; padding: 15px 25px; border-radius: 12px; }
-            .logout-btn, .back-btn { background: #ef4444; color: #fff; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; }
-            .back-btn { background: #3b82f6; }
-            .filter-box { background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
-            .filter-box input { padding: 10px; background: #0f172a; color: #fff; border: 1px solid #475569; border-radius: 8px; }
-            .btn { padding: 10px 20px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; text-decoration: none; }
-            .table-container { background: #1e293b; padding: 25px; border-radius: 12px; margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #0f172a; border-radius: 8px; overflow: hidden; }
-            th, td { padding: 14px; text-align: center; border-bottom: 1px solid #334155; font-size: 14px; } 
-            th { color: #f59e0b; background: #1e293b; }
-            .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
-            .chart-card { background: #1e293b; padding: 20px; border-radius: 12px; }
-        </style>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        </head>
+            .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+            .logout-btn { background: #ef4444; color: #fff; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; }
+            .card { background: #1e293b; padding: 25px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+            input, select { padding: 10px; margin: 8px; background: #0f172a; color: #fff; border: 1px solid #475569; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
+            button { padding: 10px 15px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #0f172a; }
+            th, td { padding: 10px; text-align: center; border-bottom: 1px solid #334155; font-size: 13px; } th { color: #f59e0b; }
+            .btn-dash { display: inline-block; background: #10b981; color: #fff; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-left: 10px; }
+        </style></head>
         <body><div class="container">
         <div class="top-bar">
-            <h2>📊 لوحة القيادة وإحصائيات المديرية</h2>
-            <div>
-                {% if session.get('role') == 'system_admin' %}
-                    <a href="/system-dashboard" class="back-btn">⬅️ العودة للوحة التحكم</a>
-                {% else %}
-                    <a href="/logout" class="logout-btn">تسجيل الخروج 🚪</a>
-                {% endif %}
-            </div>
+            <h2>🛠️ لوحة تحكم مسؤول النظام</h2>
+            <a href="/logout" class="logout-btn">تسجيل الخروج 🚪</a>
         </div>
 
-        <form method="GET" class="filter-box">
-            <span>من تاريخ: <input type="date" name="start_date" value="{{ start_date }}"></span>
-            <span>إلى تاريخ: <input type="date" name="end_date" value="{{ end_date }}"></span>
-            <button type="submit" class="btn">تصفية الإحصائيات 🔍</button>
-            <a href="/directorate-dashboard" class="btn" style="background: #64748b;">إعادة تعيين</a>
-        </form>
+        <div class="card">
+            <a href="/directorate-dashboard" class="btn-dash" style="background: #3b82f6;">📊 لوحة إحصائيات المديرية</a>
+        </div>
 
-        <div class="table-container">
-            <h3>📋 جدول ملخص نشاط المراكز</h3>
+        <div class="card">
+            <h3>📢 إدارة الشريط الإعلاني المتحرك</h3>
+            <form method="POST">
+                <input type="hidden" name="action" value="add_announcement">
+                <input type="text" name="content" placeholder="نص الإعلان الجديد..." required style="width: 70%;">
+                <button type="submit" style="background:#10b981;">إضافة إعلان</button>
+            </form>
             <table>
-                <thead>
-                    <tr><th>اسم المركز</th><th>إجمالي التذاكر</th><th>التذاكر المعالجة</th><th>التذاكر في الانتظار</th></tr>
-                </thead>
-                <tbody>
-                    {% for row in stats %}
-                    <tr>
-                        <td>{{ row.center_name }}</td>
-                        <td style="color: #38bdf8; font-weight: bold;">{{ row.total_tickets }}</td>
-                        <td style="color: #10b981; font-weight: bold;">{{ row.served_tickets }}</td>
-                        <td style="color: #f59e0b; font-weight: bold;">{{ row.waiting_tickets }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
+                <tr><th>نص الإعلان</th><th>الحالة</th><th>إجراء</th></tr>
+                {% for a in announcements %}
+                <tr>
+                    <td>{{ a.content }}</td>
+                    <td>
+                        {% if a.is_active == 1 %}<span style="color:#10b981; font-weight:bold;">نشط حالياً ⭐</span>
+                        {% else %}
+                        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="set_active_announcement"><input type="hidden" name="announcement_id" value="{{ a.id }}"><button type="submit" style="background:#f59e0b; padding:5px 10px;">تفعيل</button></form>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من الحذف؟');"><input type="hidden" name="action" value="delete_announcement"><input type="hidden" name="announcement_id" value="{{ a.id }}"><button type="submit" style="background:#ef4444; padding:5px 10px;">حذف</button></form>
+                    </td>
+                </tr>
+                {% endfor %}
             </table>
         </div>
 
-        <div class="charts-grid">
-            <div class="chart-card"><canvas id="barChart"></canvas></div>
-            <div class="chart-card"><canvas id="pieChart"></canvas></div>
+        <div class="card">
+            <h3>🎬 إدارة الفيديوهات الترويجية</h3>
+            <form method="POST">
+                <input type="hidden" name="action" value="add_video">
+                <input type="text" name="title" placeholder="عنوان الفيديو" required style="width: 30%;">
+                <input type="text" name="url" placeholder="رابط اليوتيوب" required style="width: 45%;">
+                <button type="submit" style="background:#10b981;">إضافة فيديو</button>
+            </form>
+            <table>
+                <tr><th>العنوان</th><th>الرابط</th><th>الحالة</th><th>إجراء</th></tr>
+                {% for v in videos %}
+                <tr>
+                    <td>{{ v.title }}</td>
+                    <td style="color:#38bdf8; font-size:12px;">{{ v.url }}</td>
+                    <td>
+                        {% if v.is_active == 1 %}<span style="color:#10b981; font-weight:bold;">نشط حالياً ⭐</span>
+                        {% else %}
+                        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="set_active_video"><input type="hidden" name="video_id" value="{{ v.id }}"><button type="submit" style="background:#f59e0b; padding:5px 10px;">تفعيل</button></form>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من الحذف؟');"><input type="hidden" name="action" value="delete_video"><input type="hidden" name="video_id" value="{{ v.id }}"><button type="submit" style="background:#ef4444; padding:5px 10px;">حذف</button></form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
         </div>
 
-        <script>
-            const centers = {{ centers_names | tojson }};
-            const totals = {{ total_counts | tojson }};
-            const served = {{ served_counts | tojson }};
-            new Chart(document.getElementById('barChart'), {
-                type: 'bar',
-                data: { labels: centers, datasets: [{ label: 'إجمالي التذاكر', data: totals, backgroundColor: '#3b82f6' }, { label: 'المعالجة', data: served, backgroundColor: '#10b981' }] },
-                options: { responsive: true, plugins: { legend: { labels: { color: '#fff' } } } }
-            });
-            new Chart(document.getElementById('pieChart'), {
-                type: 'doughnut',
-                data: { labels: centers, datasets: [{ data: totals, backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'] }] },
-                options: { responsive: true, plugins: { legend: { labels: { color: '#fff' } } } }
-            });
-        </script>
-        </div></body></html>
-    ''', stats=stats, start_date=start_date, end_date=end_date, centers_names=centers_names, total_counts=total_counts, served_counts=served_counts)
+        <div class="card">
+            <h3>🏢 إدارة المراكز</h3>
+            <form method="POST" style="margin-bottom:15px;">
+                <input type="hidden" name="action" value="add_center">
+                <input type="text" name="center_name" placeholder="اسم المركز الجديد" required style="width: 40%;">
+                <button type="submit" style="background:#10b981;">إضافة المركز</button>
+            </form>
+            <table>
+                <tr><th>معرف</th><th>اسم المركز</th><th>تعديل الاسم</th><th>إعادة ضبط الطابور</th><th>حذف</th></tr>
+                {% for c in centers %}
+                <tr>
+                    <td>{{ c.id }}</td>
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="action" value="edit_center">
+                            <input type="hidden" name="center_id" value="{{ c.id }}">
+                            <input type="text" name="center_name" value="{{ c.center_name }}" style="width: 55%; padding: 6px;">
+                            <button type="submit" style="background:#3b82f6; padding: 6px 10px;">حفظ</button>
+                        </form>
+                    </td>
+                    <td><button type="button" onclick="confirmResetTickets({{ c.id }}, '{{ c.center_name }}')" style="background:#d97706; padding:6px 10px;">⚠️ تصفير</button></td>
+                    <td>
+                        <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف المركز؟');"><input type="hidden" name="action" value="delete_center"><input type="hidden" name="center_id" value="{{ c.id }}"><button type="submit" style="background:#ef4444; padding:6px 10px;">حذف</button></form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
 
-# ==========================================
-# 4. لوحة تحكم مسؤول المركز (center_admin)
-# ==========================================
-@app.route('/center-dashboard', methods=['GET', 'POST'])
-def center_dashboard():
-    if session.get('role') != 'center_admin' and session.get('role') != 'system_admin':
+        <div class="card">
+            <h3>📌 إدارة المصالح</h3>
+            <form method="POST" style="margin-bottom:15px;">
+                <input type="hidden" name="action" value="add_service">
+                <select name="center_id" required style="width: 30%;"><option value="">اختر المركز</option>{% for c in centers %}<option value="{{ c.id }}">{{ c.center_name }}</option>{% endfor %}</select>
+                <input type="text" name="service_name" placeholder="اسم المصلحة" required style="width: 40%;">
+                <button type="submit" style="background:#10b981;">إضافة المصلحة</button>
+            </form>
+            <table>
+                <tr><th>المصلحة</th><th>المركز التابع له</th><th>إجراء</th></tr>
+                {% for s in services %}
+                <tr>
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="action" value="edit_service">
+                            <input type="hidden" name="service_id" value="{{ s.id }}">
+                            <input type="text" name="service_name" value="{{ s.service_name }}" style="width: 55%; padding: 6px;">
+                            <button type="submit" style="background:#3b82f6; padding: 6px 10px;">حفظ</button>
+                        </form>
+                    </td>
+                    <td>{{ s.center_name }}</td>
+                    <td>
+                        <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من الحذف؟');"><input type="hidden" name="action" value="delete_service"><input type="hidden" name="service_id" value="{{ s.id }}"><button type="submit" style="background:#ef4444; padding:6px 10px;">حذف</button></form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>👥 إدارة المستخدمين والصلاحيات</h3>
+            <form method="POST" style="margin-bottom:15px;">
+                <input type="hidden" name="action" value="add_user">
+                <input type="text" name="username" placeholder="اسم المستخدم" required style="width: 20%;">
+                <input type="password" name="password" placeholder="كلمة المرور" required style="width: 20%;">
+                <select name="role" required style="width: 18%;"><option value="employee">عون نداء</option><option value="center_admin">مسؤول مركز</option><option value="directorate">مديرية عامة</option></select>
+                <select name="center_id" style="width: 20%;"><option value="">المركز (اختياري)</option>{% for c in centers %}<option value="{{ c.id }}">{{ c.center_name }}</option>{% endfor %}</select>
+                <button type="submit" style="background:#10b981; margin-top: 5px;">إضافة مستخدم</button>
+            </form>
+            <table>
+                <tr><th>اسم المستخدم</th><th>الدور</th><th>المركز</th><th>إجراء</th></tr>
+                {% for u in users %}
+                <tr>
+                    <td>{{ u.username }}</td>
+                    <td>{{ u.role }}</td>
+                    <td>{{ u.center_name or '-' }}</td>
+                    <td>
+                        {% if u.role != 'system_admin' %}
+                        <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف المستخدم؟');"><input type="hidden" name="action" value="delete_user"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" style="background:#ef4444; padding:5px 10px;">حذف</button></form>
+                        {% else %}
+                        <span style="color:#64748b;">محمي</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div></div></body></html>
+    ''', centers=centers, services=services, users=users, videos=videos, announcements=announcements)
+
+# بقية المسارات الإضافية (الإحصائيات والشاشات)
+@app.route('/directorate-dashboard')
+def directorate_dashboard():
+    if session.get('role') not in ['system_admin', 'directorate']:
         return "غير مصرح لك بالوصول!", 403
-        
-    center_id = session.get('center_id')
-    if not center_id:
-        return "لم يتم تعيين مركز لهذا المسؤول!", 400
+    return redirect(url_for('system_dashboard'))
 
+@app.route('/api/reset-tickets/<int:center_id>', methods=['POST'])
+def reset_tickets(center_id):
     conn = get_db_connection()
-    if request.method == 'POST':
-        action = request.form.get('action')
-        if action == 'add_service':
-            s_name = request.form.get('service_name')
-            if s_name:
-                conn.execute('INSERT INTO services (center_id, service_name) VALUES (?, ?)', (center_id, s_name))
-                conn.commit()
-        elif action == 'update_announcement':
-            content = request.form.get('content')
-            if content:
-                conn.execute('UPDATE announcements SET is_active = 0')
-                conn.execute('INSERT INTO announcements (content, is_active) VALUES (?, 1)', (content,))
-                conn.commit()
-        return redirect(url_for('center_dashboard'))
-
-    center = conn.execute('SELECT * FROM centers WHERE id = ?', (center_id,)).fetchone()
-    services = conn.execute('SELECT * FROM services WHERE center_id = ?', (center_id,)).fetchall()
-    
-    stats = conn.execute('''
-        SELECT COUNT(t.id) as total,
-               SUM(CASE WHEN t.status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
-               SUM(CASE WHEN t.status = 'WAITING' THEN 1 ELSE 0 END) as waiting
-        FROM queue_tokens t JOIN services s ON t.service_id = s.id WHERE s.center_id = ?
-    ''', (center_id,)).fetchone()
-    
-    announcement = conn.execute('SELECT * FROM announcements WHERE is_active = 1 LIMIT 1').fetchone()
+    conn.execute('DELETE FROM queue_tokens WHERE center_id = ?', (center_id,))
+    conn.commit()
     conn.close()
+    return jsonify({'success': True, 'message': 'تم تصفير طابور المركز بنجاح.'})
 
-    return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>إدارة المركز</title>
-        <style>
-            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; }
-            .container { max-width: 900px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-            h2 { color: #38bdf8; text-align: center; margin-bottom: 20px; }
-            .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
-            .stat-card { background: #334155; padding: 15px; border-radius: 8px; text-align: center; }
-            .stat-num { font-size: 24px; font-weight: bold; margin-top: 5px; }
-            .section { background: #334155; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-            input { width: 100%; padding: 10px; margin-top: 8px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; box-sizing: border-box; }
-            button { background: #10b981; color: #fff; border: none; padding: 10px 20px; margin-top: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-            .links-row { display: flex; gap: 10px; margin-top: 15px; }
-            .btn-link { flex: 1; padding: 12px; text-align: center; background: #3b82f6; color: #fff; border-radius: 8px; text-decoration: none; font-weight: bold; }
-        </style></head>
-        <body>
-        <div class="container">
-            <h2>🏢 لوحة تحكم المركز: {{ center.center_name }}</h2>
-            
-            <div class="stats-grid">
-                <div class="stat-card"><div>إجمالي التذاكر</div><div class="stat-num" style="color:#38bdf8;">{{ stats.total or 0 }}</div></div>
-                <div class="stat-card"><div>المعالجة</div><div class="stat-num" style="color:#10b981;">{{ stats.completed or 0 }}</div></div>
-                <div class="stat-card"><div>في الانتظار</div><div class="stat-num" style="color:#f59e0b;">{{ stats.waiting or 0 }}</div></div>
-            </div>
-
-            <div class="links-row">
-                <a href="/display/{{ center.id }}" target="_blank" class="btn-link">📺 شاشة العرض العامة</a>
-                <a href="/kiosk/{{ center.id }}" target="_blank" class="btn-link" style="background:#10b981;">🎫 جهاز سحب التذاكر (Kiosk)</a>
-            </div>
-
-            <div class="section" style="margin-top:20px;">
-                <h3>📌 إضافة مصلحة جديدة بالمركز</h3>
-                <form method="POST">
-                    <input type="hidden" name="action" value="add_service">
-                    <input type="text" name="service_name" placeholder="اسم المصلحة" required>
-                    <button type="submit">إضافة المصلحة</button>
-                </form>
-            </div>
-
-            <div class="section">
-                <h3>📢 تحديث شريط الإعلانات الخاص بالمركز</h3>
-                <form method="POST">
-                    <input type="hidden" name="action" value="update_announcement">
-                    <input type="text" name="content" value="{{ announcement.content if announcement else '' }}" placeholder="نص الشريط الإخباري..." required>
-                    <button type="submit">تحديث الإعلان</button>
-                </form>
-            </div>
-
-            <div style="text-align: center; margin-top: 20px;">
-                <a href="/logout" style="background:#ef4444; color:#fff; padding:10px 20px; border-radius:6px; text-decoration:none; font-weight:bold;">تسجيل الخروج 🚪</a>
-            </div>
-        </div>
-        </body></html>
-    ''', center=center, services=services, stats=stats, announcement=announcement)
-
-# ==========================================
-# 5. شاشة العرض العامة (Display)
-# ==========================================
 @app.route('/display/<int:center_id>')
 def display_screen(center_id):
     conn = get_db_connection()
     center = conn.execute('SELECT * FROM centers WHERE id = ?', (center_id,)).fetchone()
     conn.close()
-    if not center: return "المركز غير موجود", 404
-        
-    return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>شاشة العرض - {{ center.center_name }}</title>
-        <style>
-            body { background: linear-gradient(135deg, #0284c7 0%, #0891b2 50%, #0d9488 100%); color: #fff; font-family: Tahoma; margin: 0; padding: 10px; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
-            .official-header { background: #ffffff; color: #0f172a; padding: 10px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
-            .center-badge { color: #0284c7; font-size: 22px; font-weight: bold; }
-            .main-content { display: flex; gap: 15px; flex-grow: 1; margin-top: 10px; }
-            .right-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; }
-            .current-box { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border-radius: 12px; padding: 15px; text-align: center; border: 2px solid rgba(255, 255, 255, 0.3); }
-            .current-ticket { font-size: 85px; font-weight: 900; color: #fff; margin: 0; }
-            .current-service { font-size: 20px; color: #fbbf24; font-weight: bold; margin-top: 8px; }
-            .history-box { background: rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 10px; flex-grow: 1; }
-            .history-item { background: rgba(0, 0, 0, 0.25); padding: 8px 12px; border-radius: 6px; margin-bottom: 5px; display: flex; justify-content: space-between; font-size: 14px; border-right: 4px solid #fbbf24; }
-            .ticker-wrap { background: #ffffff; color: #dc2626; padding: 10px 15px; border-radius: 8px; margin-top: 8px; overflow: hidden; white-space: nowrap; font-size: 18px; font-weight: bold; }
-        </style></head>
-        <body>
-        <header class="official-header"><div class="center-badge">🏢 {{ center.center_name }}</div></header>
-        <div class="main-content">
-            <div class="right-panel">
-                <div class="current-box">
-                    <div style="font-size: 14px; font-weight: bold;">التذكرة الحالية قيد النداء</div>
-                    <div id="currTicket" class="current-ticket">---</div>
-                    <div id="currService" class="current-service">لا توجد تذكرة حالية</div>
-                </div>
-                <div class="history-box">
-                    <div style="text-align:center; font-weight:bold; margin-bottom:8px;">آخر التذاكر المنداة</div>
-                    <div id="historyList" style="overflow-y:auto;"></div>
-                </div>
-            </div>
-        </div>
-        <div class="ticker-wrap"><div id="announcementTicker">مرحباً بكم في المركز الجواري للضرائب</div></div>
-        <script>
-            function fetchDisplayData() {
-                fetch('/api/display-data/{{ center.id }}').then(res => res.json()).then(data => {
-                    if (data.current) {
-                        document.getElementById('currTicket').innerText = data.current.ticket_number;
-                        document.getElementById('currService').innerText = data.current.service_name;
-                    } else {
-                        document.getElementById('currTicket').innerText = '---';
-                        document.getElementById('currService').innerText = 'لا توجد تذكرة حالية';
-                    }
-                    let historyList = document.getElementById('historyList'); historyList.innerHTML = '';
-                    if (data.history) {
-                        data.history.forEach(h => {
-                            let item = document.createElement('div'); item.className = 'history-item';
-                            item.innerHTML = `<span><b>${h.ticket_number}</b> (${h.service_name})</span> <span style="color:#4ade80;">منجز</span>`;
-                            historyList.appendChild(item);
-                        });
-                    }
-                    if (data.active_announcement) {
-                        document.getElementById('announcementTicker').innerText = data.active_announcement.content;
-                    }
-                });
-            }
-            setInterval(fetchDisplayData, 2000); fetchDisplayData();
-        </script></body></html>
-    ''', center=center)
+    return f"شاشة العرض للمركز: {center['center_name'] if center else ''}"
 
-@app.route('/api/display-data/<int:center_id>')
-def api_display_data(center_id):
-    conn = get_db_connection()
-    current = conn.execute('SELECT t.ticket_number, s.service_name, t.called_at FROM queue_tokens t JOIN services s ON t.service_id = s.id WHERE t.center_id = ? AND t.called_at IS NOT NULL ORDER BY t.called_at DESC LIMIT 1', (center_id,)).fetchone()
-    history = conn.execute('SELECT t.ticket_number, s.service_name FROM queue_tokens t JOIN services s ON t.service_id = s.id WHERE t.center_id = ? AND t.status IN ("CALLED", "COMPLETED") ORDER BY t.called_at DESC LIMIT 5', (center_id,)).fetchall()
-    active_announcement = conn.execute('SELECT * FROM announcements WHERE is_active = 1 LIMIT 1').fetchone()
-    conn.close()
-    return jsonify({
-        'current': dict(current) if current else None,
-        'history': [dict(h) for h in history],
-        'active_announcement': dict(active_announcement) if active_announcement else None
-    })
-
-# ==========================================
-# 6. جهاز سحب التذاكر (Kiosk)
-# ==========================================
 @app.route('/kiosk/<int:center_id>')
 def kiosk_machine(center_id):
-    conn = get_db_connection()
-    center = conn.execute('SELECT * FROM centers WHERE id = ?', (center_id,)).fetchone()
-    services = conn.execute('SELECT * FROM services WHERE center_id = ?', (center_id,)).fetchall()
-    conn.close()
-    
-    return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>سحب تذكرة - {{ center.center_name }}</title>
-        <style>
-            body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .box { background: #1e293b; padding: 40px; border-radius: 20px; text-align: center; width: 420px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-            .priority-box { background: rgba(245, 158, 11, 0.15); border: 2px dashed #f59e0b; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 10px; }
-            .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; }
-            .ticket-card { background: #fff; color: #000; padding: 25px; border-radius: 14px; width: 340px; text-align: center; }
-            .ticket-number { font-size: 55px; font-weight: 900; color: #0284c7; margin: 10px 0; }
-        </style></head>
-        <body>
-        <div class="box">
-            <h2>🎫 سحب تذكرة - {{ center.center_name }}</h2>
-            <div class="priority-box">
-                <input type="checkbox" id="isPriority" style="width:20px; height:20px;">
-                <label for="isPriority" style="color: #fbbf24; font-weight: bold; cursor:pointer;">♿ ذوي الاحتياجات الخاصة</label>
-            </div>
-            {% for s in services %}
-            <button onclick="issueTicket({{ s.id }})" style="display:block; width:100%; background:#3b82f6; color:#fff; padding:15px; margin:12px 0; border:none; border-radius:8px; font-weight:bold; font-size:16px; cursor:pointer;">{{ s.service_name }}</button>
-            {% endfor %}
-            <div style="margin-top: 20px;">
-                <a href="/centers" style="color: #94a3b8; font-size: 13px; text-decoration: none;">العودة لقائمة المراكز</a>
-            </div>
-        </div>
-        <div id="ticketModal" class="modal">
-            <div class="ticket-card">
-                <h3>{{ center.center_name }}</h3>
-                <div id="ticketServiceName" style="font-weight:bold; color:#15803d; margin:10px 0;"></div>
-                <div class="ticket-number" id="modalTicketNum">--</div>
-                <button onclick="window.print()" style="background:#10b981; color:#fff; border:none; padding:10px; width:100%; border-radius:6px; font-weight:bold; cursor:pointer;">🖨️ طباعة</button>
-                <button onclick="closeModal()" style="background:#ef4444; color:#fff; border:none; padding:8px; width:100%; border-radius:6px; font-weight:bold; margin-top:8px; cursor:pointer;">إغلاق</button>
-            </div>
-        </div>
-        <script>
-            function issueTicket(sId){
-                let isPriority = document.getElementById('isPriority').checked ? 1 : 0;
-                fetch('/api/issue-ticket/' + sId, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({is_priority: isPriority})
-                }).then(res => res.json()).then(data => {
-                    if(data.success){
-                        document.getElementById('modalTicketNum').innerText = data.ticket_number;
-                        document.getElementById('ticketServiceName').innerText = data.service_name;
-                        document.getElementById('ticketModal').style.display = 'flex';
-                    }
-                });
-            }
-            function closeModal(){ document.getElementById('ticketModal').style.display = 'none'; window.location.reload(); }
-        </script></body></html>
-    ''', center=center, services=services)
+    return redirect(url_for('centers_page'))
 
-@app.route('/api/issue-ticket/<int:service_id>', methods=['POST'])
-def api_issue_ticket(service_id):
-    conn = get_db_connection()
-    service = conn.execute('SELECT * FROM services WHERE id = ?', (service_id,)).fetchone()
-    data = request.get_json(silent=True) or request.form
-    is_priority = 1 if data.get('is_priority') in [1, '1', True, 'true'] else 0
-    
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    last_ticket = conn.execute('SELECT ticket_number, created_at FROM queue_tokens WHERE service_id = ? ORDER BY id DESC LIMIT 1', (service_id,)).fetchone()
-    
-    next_num = 1
-    if last_ticket and last_ticket['created_at'] and last_ticket['created_at'].split(' ')[0] == today_str:
-        try: next_num = int(last_ticket['ticket_number'].split('-')[1]) + 1
-        except: next_num = 1
-
-    prefix = "P" if is_priority else "T"
-    ticket_number = f"{prefix}-{next_num:03d}"
-    
-    conn.execute('INSERT INTO queue_tokens (center_id, service_id, ticket_number, status, is_priority) VALUES (?, ?, ?, "WAITING", ?)', 
-                 (service['center_id'], service_id, ticket_number, is_priority))
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True, 'ticket_number': ticket_number, 'service_name': service['service_name']})
-
-# ==========================================
-# 7. شاشة النداء (employee_window)
-# ==========================================
 @app.route('/employee-window')
 def employee_window():
-    if session.get('role') != 'employee':
-        return redirect(url_for('home'))
-        
-    conn = get_db_connection()
-    service = conn.execute('SELECT * FROM services WHERE id = ?', (session['service_id'],)).fetchone()
-    conn.close()
-    if not service: return redirect(url_for('home'))
-
-    return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>نافذة العون</title>
-        <style>
-            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .container { width: 450px; background: #1e293b; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-            .ticket-box { font-size: 55px; color: #38bdf8; font-weight: bold; margin: 15px 0; background: #0f172a; padding: 15px; border-radius: 10px; border: 2px solid #334155; }
-            button { width: 100%; padding: 14px; margin: 8px 0; font-size: 16px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: #fff; }
-        </style></head>
-        <body><div class="container">
-        <h2>🖥 نافذة المصلحة: {{ service.service_name }}</h2>
-        <div class="ticket-box" id="currentTicket">---</div>
-        <button style="background: #10b981;" onclick="callNext()">📢 نداء التالية</button>
-        <button style="background: #3b82f6;" onclick="completeTicket()">✅ إنهاء التذكرة الحالية</button>
-        <br><a href="/logout" style="color:#f87171; display:inline-block; margin-top:15px; text-decoration:none; font-weight:bold;">تسجيل الخروج 🚪</a>
-        </div>
-        <script>
-            function updateStatus() { 
-                fetch('/api/employee-status/{{ service.id }}').then(res=>res.json()).then(d=>{
-                    document.getElementById('currentTicket').innerText = d.current_ticket || '---';
-                }); 
-            }
-            function callNext() { 
-                fetch('/api/call-next/{{ service.id }}', {method:'POST'}).then(res=>res.json()).then(data => {
-                    if(data.success) { updateStatus(); } else { alert('لا توجد تذاكر في الانتظار حالياً!'); }
-                }); 
-            }
-            function completeTicket() { 
-                fetch('/api/complete-ticket/{{ service.id }}', {method: 'POST'}).then(()=> { updateStatus(); }); 
-            }
-            setInterval(updateStatus, 2000); updateStatus();
-        </script></body></html>
-    ''', service=service)
-
-@app.route('/api/employee-status/<int:service_id>')
-def api_employee_status(service_id):
-    conn = get_db_connection()
-    t = conn.execute('SELECT ticket_number FROM queue_tokens WHERE service_id = ? AND status = "CALLED" ORDER BY called_at DESC LIMIT 1', (service_id,)).fetchone()
-    conn.close()
-    return jsonify({'current_ticket': t['ticket_number'] if t else None})
-
-@app.route('/api/call-next/<int:service_id>', methods=['POST'])
-def api_call_next(service_id):
-    conn = get_db_connection()
-    conn.execute('UPDATE queue_tokens SET status = "COMPLETED" WHERE service_id = ? AND status = "CALLED"', (service_id,))
-    next_t = conn.execute('SELECT * FROM queue_tokens WHERE service_id = ? AND status = "WAITING" ORDER BY is_priority DESC, id ASC LIMIT 1', (service_id,)).fetchone()
-    if not next_t:
-        conn.commit()
-        conn.close()
-        return jsonify({'success': False})
-    conn.execute('UPDATE queue_tokens SET status = "CALLED", called_at = CURRENT_TIMESTAMP WHERE id = ?', (next_t['id'],))
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True, 'ticket_number': next_t['ticket_number']})
-
-@app.route('/api/complete-ticket/<int:service_id>', methods=['POST'])
-def api_complete_ticket(service_id):
-    conn = get_db_connection()
-    conn.execute('UPDATE queue_tokens SET status = "COMPLETED" WHERE service_id = ? AND status = "CALLED"', (service_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True})
+    return redirect(url_for('home'))
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
