@@ -1,4 +1,2 @@
 Flask
-requests
-gunicorn
-qrcode[pil]
+psycopg2-binary
