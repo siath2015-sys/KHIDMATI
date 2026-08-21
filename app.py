@@ -74,7 +74,7 @@ def login():
             elif user['role'] == 'center_admin': return redirect(url_for('center_dashboard'))
             elif user['role'] == 'employee': return redirect(url_for('employee_window'))
         else: 
-            error = 'اسم المستخدم أو كلمة المرور غير صحيحة.'[cite: 1]
+            error = 'اسم المستخدم أو كلمة المرور غير صحيحة.'
             
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>الدخول إلى نظام التذاكر</title>
