@@ -11,13 +11,12 @@ from flask import (
 import sqlite3
 
 app = Flask(__name__)
-app.secret_key = (
-    "your_secret_key_here"  # استبدل هذا بمفتاح سري آمن في البيئة الحقيقية
-)
+app.secret_key = "your_secret_key_here"  # استبدل هذا بمفتاح سري آمن
 
 
 def get_db_connection():
-  conn = sqlite3.connect("database.db")
+  # استخدام اسم قاعدة البيانات المخصص
+  conn = sqlite3.connect("tax-queue-db")
   conn.row_factory = sqlite3.Row
   return conn
 
@@ -61,7 +60,7 @@ def init_db():
   conn.close()
 
 
-# صفحة تسجيل الدخول (مثلية مبسطة لتوجيه الأدوار)
+# صفحة تسجيل الدخول
 @app.route("/login", methods=["GET", "POST"])
 def login():
   if request.method == "POST":
@@ -70,9 +69,7 @@ def login():
     if role == "system_admin":
       return redirect(url_for("system_dashboard"))
     elif role == "employee":
-      session["service_id"] = 1  .get(
-          "service_id", 1
-      )  # افتراضي للتجربة
+      session["service_id"] = 1
       session["center_id"] = 1
       return redirect(url_for("employee_window"))
     elif role == "directorate":
@@ -139,10 +136,7 @@ def employee_window():
   ).fetchone()
   conn.close()
   if not service or not center:
-    return (
-        "لم يتم العثور على بيانات المصلحة أو المركز المرتبط بالجلسة.",
-        400,
-    )
+    return "لم يتم العثور على بيانات المصلحة أو المركز المرتبط بالجلسة.", 400
 
   return render_template_string(
       """
@@ -466,7 +460,6 @@ def system_all_displays():
   )
 
 
-# مسار جلب بيانات الشاشة لكل مركز
 @app.route("/api/display-data/<int:center_id>")
 def api_display_data(center_id):
   conn = get_db_connection()
@@ -481,11 +474,17 @@ def api_display_data(center_id):
   ).fetchone()
   conn.close()
   return jsonify(
-      {"current": {"ticket_number": t["ticket_number"], "service_name": t["service_name"]} if t else None}
+      {
+          "current": {
+              "ticket_number": t["ticket_number"],
+              "service_name": t["service_name"],
+          }
+          if t
+          else None
+      }
   )
 
 
-# صفحة الشاشة الكاملة للمركز الواحد
 @app.route("/display/<int:center_id>")
 def display_screen(center_id):
   conn = get_db_connection()
@@ -564,5 +563,5 @@ def reset_tickets(center_id):
 
 
 if __name__ == "__main__":
-  init_db()  # إنشاء الجداول تلقائياً عند التشغيل لأول مرة
+  init_db()
   app.run(host="0.0.0.0", port=5000, debug=True)
