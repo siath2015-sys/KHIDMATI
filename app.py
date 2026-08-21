@@ -1314,6 +1314,78 @@ def reset_tickets(center_id):
         conn.close()
         
     return jsonify({'success': success, 'message': message})
+    @app.route('/track/<int:center_id>')
+def track_page(center_id):
+    conn = get_db_connection()
+    # جلب معلومات المركز ديناميكياً بناءً على الـ ID الموجود في الرابط
+    center = conn.execute('SELECT * FROM centers WHERE id = ?', (center_id,)).fetchone()
+    
+    if not center:
+        conn.close()
+        return "<h2 style='text-align:center; font-family:Tahoma; margin-top:50px; color:#ef4444;'>عذراً، هذا المركز غير موجود.</h2>", 404
+
+    # جلب التذكرة الحالية قيد النداء لهذا المركز
+    current_ticket = conn.execute('''
+        SELECT t.*, s.service_name 
+        FROM queue_tokens t 
+        JOIN services s ON t.service_id = s.id 
+        WHERE t.center_id = ? AND t.status = 'CALLED' 
+        ORDER BY t.called_at DESC LIMIT 1
+    ''', (center_id,)).fetchone()
+
+    # جلب آخر التذاكر المنجزة أو قائمة الانتظار المصغرة ليعلم المواطن دوره
+    waiting_count = conn.execute('''
+        SELECT COUNT(*) as cnt FROM queue_tokens 
+        WHERE center_id = ? AND status = 'WAITING'
+    ''', (center_id,)).fetchone()['cnt']
+
+    conn.close()
+
+    # تصميم صفحة المتابعة التي ستفتح في هاتف المواطن
+    return render_template_string('''
+        <!DOCTYPE html>
+        <html lang="ar" dir="rtl">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>متابعة الدور - {{ center.center_name }}</title>
+            <meta http-equiv="refresh" content="10"> <!-- تحديث تلقائي للصفحة كل 10 ثواني -->
+            <style>
+                body { background: #0f172a; color: #fff; font-family: 'Segoe UI', Tahoma; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; box-sizing: border-box; }
+                .card { background: #1e293b; padding: 25px; border-radius: 16px; text-align: center; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
+                .center-title { font-size: 18px; color: #38bdf8; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #334155; padding-bottom: 10px; }
+                .ticket-box { background: #0f172a; border-radius: 12px; padding: 20px; margin: 15px 0; border: 2px solid #0ea5e9; }
+                .ticket-num { font-size: 60px; font-weight: 900; color: #fbbf24; margin: 5px 0; }
+                .service-name { font-size: 16px; color: #cbd5e1; font-weight: bold; }
+                .info-badge { background: rgba(14, 165, 233, 0.15); color: #38bdf8; padding: 10px; border-radius: 8px; font-size: 14px; margin-top: 15px; font-weight: bold; }
+                .footer-note { font-size: 12px; color: #64748b; margin-top: 20px; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div class="center-title">🏢 {{ center.center_name }}</div>
+                
+                <div style="font-size: 14px; color: #94a3b8;">التذكرة الحالية قيد النداء</div>
+                
+                <div class="ticket-box">
+                    {% if current_ticket %}
+                        <div class="ticket-num">{{ current_ticket.ticket_number }}</div>
+                        <div class="service-name">مصلحة: {{ current_ticket.service_name }}</div>
+                    {% else %}
+                        <div class="ticket-num" style="font-size: 35px; color: #94a3b8;">---</div>
+                        <div class="service-name">لا توجد تذكرة منداءة حالياً</div>
+                    {% endif %}
+                </div>
+
+                <div class="info-badge">
+                    ⏳ عدد التذاكر في قائمة الانتظار حالياً: <span style="color: #fbbf24; font-size: 18px;">{{ waiting_count }}</span>
+                </div>
+
+                <div class="footer-note">تتحدث هذه الصفحة تلقائياً لمتابعة دورك بسلاسة.</div>
+            </div>
+        </body>
+        </html>
+    ''', center=center, current_ticket=current_ticket, waiting_count=waiting_count)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
