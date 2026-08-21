@@ -329,27 +329,203 @@ def system_dashboard():
     conn.close()
 
     return render_template_string('''
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>لوحة تحكم المسؤول</title>
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>لوحة التحكم الشاملة</title>
+        <script>
+            window.addEventListener("pageshow", function (event) {
+                if (event.persisted) { window.location.reload(); }
+            });
+
+            function confirmResetTickets(centerId, centerName) {
+                if (confirm('هل أنت متأكد من رغبة في تصفير وإعادة ضبط طابور المركز: ' + centerName + '؟')) {
+                    fetch('/api/reset-tickets/' + centerId, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'}
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert(data.message);
+                            location.reload();
+                        } else {
+                            alert(data.message);
+                        }
+                    })
+                    .catch(err => {
+                        alert('حدث خطأ في الاتصال بالخادم.');
+                    });
+                }
+            }
+        </script>
         <style>
-            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 40px; text-align: center; }
-            h1 { color: #f59e0b; margin-bottom: 30px; }
-            .menu-grid { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; max-width: 900px; margin: auto; }
-            a { display: inline-block; padding: 20px 25px; background: #1e293b; border: 1px solid #334155; color: #38bdf8; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 16px; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 260px; box-sizing: border-box; }
-            a:hover { background: #3b82f6; color: #fff; transform: translateY(-3px); }
-            .logout { background: #7f1d1d; color: #f87171; border-color: #991b1b; }
-            .logout:hover { background: #ef4444; color: #fff; }
+            body { background: #0f172a; color: #fff; font-family: Tahoma; padding: 20px; }
+            .container { max-width: 1200px; margin: auto; }
+            .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+            .logout-btn { background: #ef4444; color: #fff; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(239,68,68,0.3); transition: 0.2s; }
+            .logout-btn:hover { background: #dc2626; }
+            .card { background: #1e293b; padding: 25px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+            input, select { padding: 12px; margin: 8px; background: #0f172a; color: #fff; border: 1px solid #475569; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
+            button { padding: 12px 20px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #0f172a; }
+            th, td { padding: 12px; text-align: center; border-bottom: 1px solid #334155; font-size: 14px; } th { color: #f59e0b; }
+            .btn-dash { display: inline-block; background: #10b981; color: #fff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-left: 10px; }
         </style></head>
-        <body>
-        <h1>🛠️ لوحة تحكم مسؤول النظام المركزية</h1>
-        <div class="menu-grid">
-            <a href="/system/dashboard-stats">📊 إحصائيات وتقارير المديرية</a>
-            <a href="/system/all-displays">🖥️ مراقبة الشاشات اللحظية</a>
-            <a href="/kiosk/1" target="_blank">🎟️ جهاز سحب التذاكر (Kiosk)</a>
-            <a href="/display/1" target="_blank">📺 شاشة عرض المركز الرئيسي</a>
-            <a href="/logout" class="logout">تسجيل الخروج 🚪</a>
+        <body><div class="container">
+        
+        <div class="top-bar">
+            <h2>🛠️ لوحة تحكم مسؤول النظام (التحكم الكامل بالحذف والتعديل والإضافة)</h2>
+            <a href="/logout" class="logout-btn"><span>تسجيل الخروج</span> 🚪</a>
         </div>
-        </body></html>
-    ''')
+        
+         <div class="card">
+            <a href="/system/all-displays" target="_blank" class="btn-dash">🖥️ عرض شاشات كل المراكز</a>
+            <a href="/system/dashboard-stats" target="_blank" class="btn-dash" style="background: #3b82f6;">📊 لوحة إحصائيات المديرية (Tableau de Bord)</a>
+        </div> 
+
+       <div class="card">
+            <h3>📢 إدارة الشريط الإعلاني المتحرك</h3>
+            <form method="POST">
+                <input type="hidden" name="action" value="add_announcement">
+                <input type="text" name="content" placeholder="نص الإعلان أو الشريط المتحرك الجديد..." required style="width: 72%;">
+                <button type="submit" style="background:#10b981;">إضافة إعلان</button>
+            </form>
+            <table>
+                <tr><th>نص الإعلان</th><th>الحالة</th><th>إجراء</th></tr>
+                {% for a in announcements %}
+                <tr>
+                    <td>{{ a.content }}</td>
+                    <td>
+                        {% if a.is_active == 1 %}<span style="color:#10b981; font-weight:bold;">نشط حالياً ⭐</span>
+                        {% else %}
+                        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="set_active_announcement"><input type="hidden" name="announcement_id" value="{{ a.id }}"><button type="submit" style="background:#f59e0b; padding:5px 12px; font-size:12px;">تفعيل</button></form>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="delete_announcement"><input type="hidden" name="announcement_id" value="{{ a.id }}"><button type="submit" style="background:#ef4444; padding:5px 12px; font-size:12px;">حذف</button></form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+       
+        <div class="card">
+            <h3>🎬 إدارة الفيديوهات الترويجية للشاشات (قائمة التشغيل المتسلسلة)</h3>
+            <form method="POST">
+                <input type="hidden" name="action" value="add_video">
+                <input type="text" name="title" placeholder="عنوان الفيديو" required style="width: 28%;">
+                <input type="text" name="url" placeholder="رابط الفيديو (رابط يوتيوب كامل أو معرف الفيديو)" required style="width: 48%;">
+                <button type="submit" style="background:#10b981;">إضافة فيديو</button>
+            </form>
+            <table>
+                <tr><th>العنوان</th><th>الرابط</th><th>الحالة</th><th>إجراء</th></tr>
+                {% for v in videos %}
+                <tr>
+                    <td>{{ v.title }}</td>
+                    <td style="color:#38bdf8; font-size:12px;">{{ v.url }}</td>
+                    <td>
+                        {% if v.is_active == 1 %}<span style="color:#10b981; font-weight:bold;">نشط حالياً ⭐</span>
+                        {% else %}
+                        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="set_active_video"><input type="hidden" name="video_id" value="{{ v.id }}"><button type="submit" style="background:#f59e0b; padding:5px 12px; font-size:12px;">تفعيل</button></form>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="delete_video"><input type="hidden" name="video_id" value="{{ v.id }}"><button type="submit" style="background:#ef4444; padding:5px 12px; font-size:12px;">حذف</button></form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>🏢 إدارة المراكز وإعادة ضبط الطوابير</h3>
+            <form method="POST" style="margin-bottom:15px;">
+                <input type="hidden" name="action" value="add_center">
+                <input type="text" name="center_name" placeholder="اسم المركز الجديد" required style="width: 40%;">
+                <button type="submit" style="background:#10b981;">إضافة المركز</button>
+            </form>
+            <table>
+                <tr><th>معرف المركز</th><th>اسم المركز</th><th>تعديل الاسم</th><th>إعادة ضبط الطابور</th><th>حذف المركز</th></tr>
+                {% for c in centers %}
+                <tr>
+                    <td>{{ c.id }}</td>
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="action" value="edit_center">
+                            <input type="hidden" name="center_id" value="{{ c.id }}">
+                            <input type="text" name="center_name" value="{{ c.center_name }}" style="width: 60%; padding: 8px;">
+                            <button type="submit" style="background:#3b82f6; padding: 8px 15px; font-size:12px;">حفظ</button>
+                        </form>
+                    </td>
+                    <td>
+                        <button type="button" onclick="confirmResetTickets({{ c.id }}, '{{ c.center_name }}')" style="background:#d97706; padding:8px 15px; font-size:12px;">⚠️ تصفير الطابور</button>
+                    </td>
+                    <td>
+                        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="delete_center"><input type="hidden" name="center_id" value="{{ c.id }}"><button type="submit" style="background:#ef4444; padding:8px 15px; font-size:12px;">حذف</button></form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>📌 إدارة المصالح</h3>
+            <form method="POST" style="margin-bottom:15px;">
+                <input type="hidden" name="action" value="add_service">
+                <select name="center_id" required style="width: 30%;"><option value="">اختر المركز</option>{% for c in centers %}<option value="{{ c.id }}">{{ c.center_name }}</option>{% endfor %}</select>
+                <input type="text" name="service_name" placeholder="اسم المصلحة" required style="width: 40%;">
+                <button type="submit" style="background:#10b981;">إضافة المصلحة</button>
+            </form>
+            <table>
+                <tr><th>المصلحة</th><th>المركز التابع له</th><th>تعديل الاسم</th><th>حذف</th></tr>
+                {% for s in services %}
+                <tr>
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="action" value="edit_service">
+                            <input type="hidden" name="service_id" value="{{ s.id }}">
+                            <input type="text" name="service_name" value="{{ s.service_name }}" style="width: 60%; padding: 8px;">
+                            <button type="submit" style="background:#3b82f6; padding: 8px 15px; font-size:12px;">حفظ</button>
+                        </form>
+                    </td>
+                    <td>{{ s.center_name }}</td>
+                    <td>
+                        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="delete_service"><input type="hidden" name="service_id" value="{{ s.id }}"><button type="submit" style="background:#ef4444; padding:8px 15px; font-size:12px;">حذف</button></form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>👥 إدارة المستخدمين والصلاحيات</h3>
+            <form method="POST" style="margin-bottom:15px;">
+                <input type="hidden" name="action" value="add_user">
+                <input type="text" name="username" placeholder="اسم المستخدم" required style="width: 22%;">
+                <input type="password" name="password" placeholder="كلمة المرور" required style="width: 22%;">
+                <select name="role" required style="width: 20%;"><option value="employee">عون نداء</option><option value="center_admin">مسؤول مركز</option><option value="directorate">مديرية عامة</option></select>
+                <select name="center_id" style="width: 25%;"><option value="">اختر المركز</option>{% for c in centers %}<option value="{{ c.id }}">{{ c.center_name }}</option>{% endfor %}</select>
+                <select name="service_id" style="width: 30%;"><option value="">اختر المصلحة</option>{% for s in services %}<option value="{{ s.id }}">{{ s.center_name }} - {{ s.service_name }}</option>{% endfor %}</select>
+                <button type="submit" style="background:#10b981; margin-top: 10px;">إضافة مستخدم</button>
+            </form>
+            <table>
+                <tr><th>اسم المستخدم</th><th>الدور</th><th>المركز</th><th>المصلحة</th><th>إجراء</th></tr>
+                {% for u in users %}
+                <tr>
+                    <td>{{ u.username }}</td>
+                    <td>{{ u.role }}</td>
+                    <td>{{ u.center_name or '-' }}</td>
+                    <td>{{ u.service_name or '-' }}</td>
+                    <td>
+                        {% if u.role != 'system_admin' %}
+                        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="delete_user"><input type="hidden" name="user_id" value="{{ u.id }}"><button type="submit" style="background:#ef4444; padding:5px 12px; font-size:12px;">حذف</button></form>
+                        {% else %}
+                        <span style="color:#64748b;">محمي</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div></div></body></html>
+    ''', centers=centers, services=services, users=users, videos=videos, announcements=announcements)
 
 @app.route('/directorate-dashboard')
 def directorate_dashboard():
