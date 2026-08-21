@@ -11,12 +11,48 @@ def get_db_connection():
     return conn
 
 # ==========================================
-# 1. مسار تسجيل الخروج (مفصول لتجنب أي تداخل)
+# 0. المسار الجذري (الصفحة الرئيسية لحل خطأ 404)
+# ==========================================
+@app.route('/')
+def home():
+    conn = get_db_connection()
+    centers = conn.execute('SELECT * FROM centers').fetchall()
+    conn.close()
+    
+    return render_template_string('''
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>منظومة إدارة الطوابير</title>
+        <style>
+            body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .box { background: #1e293b; padding: 40px; border-radius: 20px; text-align: center; width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+            h2 { color: #38bdf8; margin-bottom: 20px; }
+            .btn { display: block; background: #3b82f6; color: #fff; padding: 12px; margin: 10px 0; border-radius: 8px; text-decoration: none; font-weight: bold; transition: 0.2s; }
+            .btn:hover { background: #2563eb; }
+            .btn-green { background: #10b981; }
+            .btn-green:hover { background: #059669; }
+        </style></head>
+        <body>
+        <div class="box">
+            <h2>🏢 مراكز الخدمات المتاحة</h2>
+            <p style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;">اختر المركز للانتقال إلى واجهة العرض أو سحب التذاكر</p>
+            {% for c in centers %}
+                <div style="background: #334155; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: right;">
+                    <div style="font-weight: bold; font-size: 16px; margin-bottom: 10px;">{{ c.center_name }}</div>
+                    <a class="btn" href="/display/{{ c.id }}">📺 شاشة العرض العامة</a>
+                    <a class="btn btn-green" href="/kiosk/{{ c.id }}">🎫 جهاز سحب التذاكر (Kiosk)</a>
+                </div>
+            {% endfor %}
+            <a href="/employee-window" style="color: #cbd5e1; font-size: 13px; display: inline-block; margin-top: 15px; text-decoration: underline;">تسجيل دخول الموظفين / الأعوان</a>
+        </div>
+        </body></html>
+    ''', centers=centers)
+
+# ==========================================
+# 1. مسار تسجيل الخروج
 # ==========================================
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('employee_login')) # أو توجيهه لصفحة تسجيل الدخول الخاصة بك
+    return redirect(url_for('home'))
 
 # ==========================================
 # 2. شاشة العرض العامة (Display Screen)
@@ -32,7 +68,6 @@ def display_screen(center_id):
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>شاشة العرض - {{ center.center_name }}</title>
         <script src="https://www.youtube.com/iframe_api"></script>
-        <!-- مكتبة توليد QR Code -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
             window.addEventListener("pageshow", function (event) {
