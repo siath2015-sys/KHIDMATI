@@ -651,16 +651,18 @@ def display_screen(center_id):
 
         <script>
             window.onload = function() {
-                let trackUrl = window.location.origin + "/track/{{ center.id }}";
-                new QRCode(document.getElementById("qrcode"), {
-                    text: trackUrl,
-                    width: 75,
-                    height: 75,
-                    colorDark : "#0f172a",
-                    colorLight : "#ffffff",
-                    correctLevel : QRCode.CorrectLevel.H
-                });
-            };
+    // ضع رابط موقعك الحقيقي هنا مباشرة
+    let trackUrl = "https://khidma-6ozh.onrender.com/track/{{ center.id }}"; 
+    
+    new QRCode(document.getElementById("qrcode"), {
+        text: trackUrl,
+        width: 75,
+        height: 75,
+        colorDark : "#0f172a",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
+    });
+};
 
             function updateClock() {
                 const now = new Date();
