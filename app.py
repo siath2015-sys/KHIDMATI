@@ -9,6 +9,7 @@ from flask import (
     url_for,
 )
 import sqlite3
+import os
 
 app = Flask(__name__)
 app.secret_key = "tax_queue_secure_secret_key_2026"
@@ -25,6 +26,8 @@ def get_db_connection():
 
 def init_db():
   conn = get_db_connection()
+
+  # إنشاء الجداول الأساسية
   conn.execute("""
         CREATE TABLE IF NOT EXISTS centers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,6 +40,18 @@ def init_db():
             center_id INTEGER,
             service_name TEXT NOT NULL,
             FOREIGN KEY (center_id) REFERENCES centers (id)
+        )
+    """)
+  conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            role TEXT NOT NULL,
+            center_id INTEGER,
+            service_id INTEGER,
+            FOREIGN KEY (center_id) REFERENCES centers (id),
+            FOREIGN KEY (service_id) REFERENCES services (id)
         )
     """)
   conn.execute("""
@@ -56,7 +71,7 @@ def init_db():
     """)
   conn.commit()
 
-  # إدراج مركز افتراضي ومصالح افتراضية لضمان عمل النظام فوراً
+  # إدراج مركز افتراضي ومصلحتين افتراضيتين إذا كان الجدول فارغاً
   center_count = conn.execute("SELECT COUNT(*) FROM centers").fetchone()[0]
   if center_count == 0:
     conn.execute(
@@ -72,6 +87,25 @@ def init_db():
         (1, "مصلحة الاستقبال ووعاء الضريبة"),
     )
     conn.commit()
+
+  # إدراج مستخدمين افتراضيين لكل الأدوار لتسهيل الاختبار الفوري
+  user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+  if user_count == 0:
+    default_users = [
+        ("admin", "admin123", "system_admin", None, None),
+        ("dir", "dir123", "directorate", None, None),
+        ("center", "center123", "center_admin", 1, None),
+        ("emp", "emp123", "employee", 1, 1),
+    ]
+    conn.executemany(
+        """
+            INSERT OR IGNORE INTO users (username, password, role, center_id, service_id)
+            VALUES (?, ?, ?, ?, ?)
+        """,
+        default_users,
+    )
+    conn.commit()
+
   conn.close()
 
 
@@ -79,54 +113,15 @@ def init_db():
 init_db()
 
 
-# واجهة تسجيل الدخول الموحدة
-@app.route("/login", methods=["GET", "POST"])
-def login():
-  if request.method == "POST":
-    role = request.form.get("role")
-    session["role"] = role
-    if role == "system_admin":
-      return redirect(url_for("system_dashboard"))
-    elif role == "employee":
-      session["service_id"] = 1
-      session["center_id"] = 1
-      return redirect(url_for("employee_window"))
-    elif role == "directorate":
-      return redirect(url_for("dashboard_stats"))
-
-  return render_template_string("""
-        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>تسجيل الدخول - نظام إدارة الطابور الجبائي</title>
-        <style>
-            * { box-sizing: border-box; }
-            body { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); color: #fff; font-family: Tahoma, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .login-card { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(12px); padding: 40px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.6); width: 400px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
-            .login-card h2 { margin-bottom: 25px; color: #f59e0b; font-size: 24px; font-weight: bold; }
-            .form-group { margin-bottom: 20px; text-align: right; }
-            .form-group label { display: block; margin-bottom: 8px; color: #94a3b8; font-size: 14px; }
-            select { width: 100%; padding: 14px; background: #0f172a; color: #fff; border: 2px solid #334155; border-radius: 10px; font-size: 15px; outline: none; transition: 0.3s; }
-            select:focus { border-color: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.3); }
-            button { width: 100%; padding: 14px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #fff; font-weight: bold; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; transition: 0.3s; margin-top: 10px; box-shadow: 0 4px 12px rgba(59,130,246,0.4); }
-            button:hover { transform: translateY(-2px); opacity: 0.95; }
-            .footer-text { margin-top: 20px; font-size: 12px; color: #64748b; }
-        </style></head>
-        <body>
-        <div class="login-card">
-            <h2>🏢 النظام الذكي لإدارة الطابور</h2>
-            <form method="POST">
-                <div class="form-group">
-                    <label>اختر صفة الدخول للنظام:</label>
-                    <select name="role">
-                        <option value="system_admin">🛠️ مسؤول النظام (System Admin)</option>
-                        <option value="employee">🖥️ عون مصلحة الاستقبال (Employee)</option>
-                        <option value="directorate">📊 إحصائيات وتقارير المديرية</option>
-                    </select>
-                </div>
-                <button type="submit">تسجيل الدخول 🚀</button>
-            </form>
-            <div class="footer-text">مديرية الضرائب لولاية ميلة © 2026</div>
-        </div>
-        </body></html>
-    """)
+# ترويسات منع التخزين المؤقت لجميع الردود
+@app.after_request
+def add_header(response):
+  response.headers["Cache-Control"] = (
+      "no-cache, no-store, must-revalidate, public, max-age=0"
+  )
+  response.headers["Pragma"] = "no-cache"
+  response.headers["Expires"] = "0"
+  return response
 
 
 @app.route("/")
@@ -138,6 +133,133 @@ def index():
 def logout():
   session.clear()
   return redirect(url_for("login"))
+
+
+# --- واجهة تسجيل الدخول الجديدة بالاعتماد على قاعدة البيانات ---
+@app.route("/login", methods=["GET", "POST"])
+def login():
+  error = None
+  if request.method == "POST":
+    username = request.form.get("username")
+    password = request.form.get("password")
+
+    conn = get_db_connection()
+    user = conn.execute(
+        "SELECT * FROM users WHERE username = ? AND password = ?",
+        (username, password),
+    ).fetchone()
+    conn.close()
+
+    if user:
+      session["user_id"] = user["id"]
+      session["username"] = user["username"]
+      session["role"] = user["role"]
+      session["center_id"] = user["center_id"]
+      session["service_id"] = user["service_id"]
+
+      if user["role"] == "system_admin":
+        return redirect(url_for("system_dashboard"))
+      elif user["role"] == "directorate":
+        return redirect(url_for("dashboard_stats"))
+      elif user["role"] == "center_admin":
+        return redirect(
+            url_for("kiosk_station", center_id=user["center_id"] or 1)
+        )
+      elif user["role"] == "employee":
+        return redirect(url_for("employee_window"))
+    else:
+      error = "اسم المستخدم أو كلمة المرور غير صحيحة."
+
+  return render_template_string(
+      """
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>الدخول إلى نظام التذاكر</title>
+        <script>
+            window.addEventListener("pageshow", function (event) {
+                if (event.persisted) { window.location.reload(); }
+            });
+        </script>
+        <style>
+            body { 
+                background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
+                color: #1e293b; 
+                font-family: Tahoma; 
+                display: flex; 
+                flex-direction: column; 
+                justify-content: space-between; 
+                align-items: center; 
+                height: 100vh; 
+                margin: 0; 
+                padding: 20px; 
+                box-sizing: border-box; 
+            }
+            .login-container { display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; width: 100%; }
+            .card { 
+                background: #ffffff; 
+                padding: 35px; 
+                border-radius: 15px; 
+                width: 100%; 
+                max-width: 420px; 
+                text-align: center; 
+                box-shadow: 0 15px 35px rgba(0,0,0,0.3); 
+                border: 1px solid #e2e8f0; 
+            }
+            .logo-img { height: 75px; object-fit: contain; margin-bottom: 15px; }
+            input { 
+                width: 92%; 
+                padding: 14px; 
+                margin: 10px 0; 
+                border-radius: 8px; 
+                border: 1px solid #cbd5e1; 
+                background: #f8fafc; 
+                color: #0f172a; 
+                font-size: 15px; 
+                box-sizing: border-box; 
+            }
+            input:focus { border-color: #3b82f6; outline: none; background: #fff; }
+            button { 
+                width: 92%; 
+                padding: 14px; 
+                background: #2563eb; 
+                color: #fff; 
+                border: none; 
+                border-radius: 8px; 
+                font-weight: bold; 
+                font-size: 16px; 
+                cursor: pointer; 
+                margin-top: 10px; 
+                transition: 0.2s; 
+            }
+            button:hover { background: #1d4ed8; }
+            .footer-signature { text-align: center; color: #cbd5e1; font-size: 13px; line-height: 1.6; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); width: 100%; max-width: 600px; }
+        </style></head>
+        
+        <body>
+        <div></div>
+        
+        <div class="login-container">
+            <div class="card">
+                <img src="/static/header_logo.png" alt="شعار المديرية العامة للضرائب" class="logo-img" onerror="this.src='https://i.ibb.co/6y4G894/header-logo.png'">
+                <h3 style="margin-top: 5px; margin-bottom: 20px; color: #1e293b; font-size: 20px;">الدخول إلى نظام التذاكر</h3>
+                
+                {% if error %}<div style="color:#ef4444; background:rgba(239,68,68,0.1); padding:10px; border-radius:6px; margin-bottom:15px; font-weight:bold; font-size: 14px;">{{ error }}</div>{% endif %}
+                
+                <form method="POST">
+                    <input type="text" name="username" placeholder="اسم المستخدم" required autocomplete="off"><br>
+                    <input type="password" name="password" placeholder="كلمة المرور" required><br>
+                    <button type="submit">تسجيل الدخول</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="footer-signature">
+            من إنجاز: <b>عتامنة الطاهر</b> - تقني سامي إعلام آلي<br>
+            المديرية الولائية للضرائب ميلة
+        </div>
+        
+        </body></html>
+    """,
+      error=error,
+  )
 
 
 # --- لوحة تحكم مسؤول النظام ---
@@ -672,7 +794,7 @@ def dashboard_stats():
         </style></head>
         <body>
         <div class="container">
-            <a href="/system-dashboard" class="back-btn">⬅ العودة للوحة التحكم</a>
+            <a href="/system-dashboard" class="back-btn">⬅ العودة لوحة التحكم</a>
             <h1>📊 إحصائيات مراكز الضرائب</h1>
             <table>
                 <tr>
@@ -698,7 +820,5 @@ def dashboard_stats():
 
 
 if __name__ == "__main__":
-  import os
-
   port = int(os.environ.get("PORT", 5000))
   app.run(host="0.0.0.0", port=port, debug=False)
