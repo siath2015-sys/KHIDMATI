@@ -15,7 +15,8 @@ app = Flask(__name__)
 app.secret_key = 'tax_queue_system_secret_key_2026'
 
 def get_db_connection():
-    conn = sqlite3.connect('database.db')
+    # تغيير اسم ملف قاعدة البيانات هنا
+    conn = sqlite3.connect('tax-queue-db.db') 
     conn.row_factory = sqlite3.Row
     return conn
 
