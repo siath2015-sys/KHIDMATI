@@ -276,6 +276,27 @@ def system_dashboard():
             <h2>🛠️ لوحة تحكم مسؤول النظام (التحكم الكامل بالحذف والتعديل والإضافة)</h2>
             <a href="/logout" class="logout-btn"><span>تسجيل الخروج</span> 🚪</a>
         </div>
+<div style="background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #334155; color: #fff; font-family: Tahoma;">
+    <h3 style="margin-top: 0; color: #38bdf8;">💾 إدارة النسخ الاحتياطي لقاعدة البيانات والإحصائيات</h3>
+    
+    <!-- زر تحميل النسخة الاحتياطية -->
+    <div style="margin-bottom: 15px;">
+        <p style="font-size: 14px; color: #94a3b8;">قم بتحميل نسخة احتياطية من قاعدة البيانات على حاسوبك قبل إجراء أي تحديث:</p>
+        <a href="/admin/backup-db" style="background: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">📥 تحميل النسخة الاحتياطية (Backup)</a>
+    </div>
+
+    <hr style="border-color: #334155; margin: 15px 0;">
+
+    <!-- نموذج استرجاع النسخة الاحتياطية -->
+    <div>
+        <p style="font-size: 14px; color: #94a3b8;">استرجاع قاعدة البيانات السابقة بعد التحديث:</p>
+        <form action="/admin/restore-db" method="POST" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center;">
+            <input type="file" name="db_file" accept=".db" required style="color: #cbd5e1; background: #0f172a; padding: 8px; border-radius: 6px; border: 1px solid #475569;">
+            <button type="submit" style="background: #f59e0b; color: #000; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;">🔄 استرجاع القاعدة (Restore)</button>
+        </form>
+    </div>
+</div>
+
         
          <div class="card">
             <a href="/system/all-displays" target="_blank" class="btn-dash">🖥️ عرض شاشات كل المراكز</a>
@@ -1486,6 +1507,38 @@ def track_page(item_id):
 
     conn.close()
     return "<h2 style='text-align:center; font-family:Tahoma; margin-top:50px; color:#ef4444;'>عذراً، الرابط غير صحيح أو العنصر غير موجود.</h2>", 404  
+
+from flask import send_file, request, redirect, url_for, session
+
+# مسار لتحميل نسخة احتياطية لقاعدة البيانات
+@app.route('/admin/backup-db')
+def backup_database():
+    # التأكد أن المستخدم المدير العام هو من يقوم بالتحميل لأسباب أمنية
+    if session.get('role') != 'system_admin':
+        return "غير مصرح لك بالقيام بهذا الإجراء", 403
+    
+    # إرسال ملف قاعدة البيانات للتحميل مباشرة إلى حاسوبك
+    return send_file('tax-queue-db.db', as_attachment=True)
+
+# مسار لاسترجاع ورفع النسخة الاحتياطية
+@app.route('/admin/restore-db', methods=['POST'])
+def restore_database():
+    if session.get('role') != 'system_admin':
+        return "غير مصرح لك بالقيام بهذا الإجراء", 403
+    
+    if 'db_file' not in request.files:
+        return "لم يتم اختيار أي ملف", 400
+    
+    file = request.files['db_file']
+    if file.filename == '':
+        return "اسم الملف فارغ", 400
+    
+    if file:
+        # حفظ الملف فوق القاعدة القديمة واستبدالها بالكامل
+        file.save('tax-queue-db.db')
+        return "تم استرجاع قاعدة البيانات والإحصائيات بنجاح! يمكنك العودة للنظام."
+
+    return "حدث خطأ أثناء رفع الملف", 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
