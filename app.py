@@ -671,7 +671,12 @@ def display_screen(center_id):
         <div class="ticker-wrap"><div class="ticker" id="announcementTicker">مرحباً بكم في مديرية الضرائب لولاية ميلة - المركز الجواري يرحب بكم</div></div>
 
         <script>
-            let currentTicketId = null; // متغير لتتبع معرّف التذكرة الحالية وتجنب إعادة توليد الـ QR بلا داعٍ
+            let currentTicketId = null; 
+            let lastSpokenTicket = "";
+            let chimeAudio = new Audio('/static/beep.mp3');
+            chimeAudio.preload = 'auto';
+
+            let playlist = [], currentVideoIndex = 0, player = null, ytApiReady = false, isMutedByUser = false;
 
             function updateClock() {
                 const now = new Date();
@@ -679,10 +684,6 @@ def display_screen(center_id):
                 document.getElementById('liveDate').innerText = now.toLocaleDateString('ar-DZ', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
             }
             setInterval(updateClock, 1000); updateClock();
-
-            let lastSpokenTicket = "";
-            let chimeAudio = new Audio('/static/beep.mp3');
-            let playlist = [], currentVideoIndex = 0, player = null, ytApiReady = false, isMutedByUser = false;
 
             function onYouTubeIframeAPIReady() { ytApiReady = true; if (playlist.length > 0) initPlayerForCurrentVideo(); }
             
@@ -708,9 +709,16 @@ def display_screen(center_id):
 
             function playAnnouncementSoundAndSpeech(ticketNum, serviceName) {
                 muteVideo(); 
-                chimeAudio.play().then(() => {
+                let playPromise = chimeAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        setTimeout(() => speak(ticketNum, serviceName), 800);
+                    }).catch(e => {
+                        speak(ticketNum, serviceName);
+                    });
+                } else {
                     setTimeout(() => speak(ticketNum, serviceName), 800);
-                }).catch(e => speak(ticketNum, serviceName));
+                }
 
                 let ticketEl = document.getElementById('currTicket');
                 ticketEl.classList.add('pulse');
@@ -764,14 +772,14 @@ def display_screen(center_id):
                 fetch('/api/display-data/{{ center.id }}').then(res => res.json()).then(data => {
                     let qrEl = document.getElementById("qrcode");
 
-                    if (data.current) {
-                        let tNum = data.current.ticket_number, sName = data.current.service_name;
-                        let tId = data.current.id; // معرّف التذكرة الحالية في قاعدة البيانات
+                    if (data.current && data.current.id) {
+                        let tNum = data.current.ticket_number;
+                        let sName = data.current.service_name;
+                        let tId = data.current.id; 
 
-                        // تحديث الـ QR Code فقط إذا تغيرت التذكرة الحالية
                         if (currentTicketId !== tId) {
                             currentTicketId = tId;
-                            qrEl.innerHTML = ""; // تفريغ الـ QR القديم
+                            qrEl.innerHTML = ""; 
                             
                             let trackUrl = `${window.location.origin}/track/${tId}`;
                             new QRCode(qrEl, {
@@ -788,13 +796,15 @@ def display_screen(center_id):
                         document.getElementById('currService').innerText = sName;
                         
                         let uniqueKey = tNum + '-' + data.current.called_at;
-                        if (lastSpokenTicket !== uniqueKey) { lastSpokenTicket = uniqueKey; playAnnouncementSoundAndSpeech(tNum, sName); }
+                        if (lastSpokenTicket !== uniqueKey) { 
+                            lastSpokenTicket = uniqueKey; 
+                            playAnnouncementSoundAndSpeech(tNum, sName); 
+                        }
                     } else {
                         currentTicketId = null;
                         document.getElementById('currTicket').innerText = '---';
                         document.getElementById('currService').innerText = 'لا توجد تذكرة حالية';
                         
-                        // في حالة عدم وجود تذكرة، نعرض QR الخاص برابط المركز العام كبديل افتراضي
                         qrEl.innerHTML = "";
                         new QRCode(qrEl, {
                             text: `${window.location.origin}/track/{{ center.id }}`,
@@ -821,15 +831,25 @@ def display_screen(center_id):
             setInterval(fetchDisplayData, 2000); fetchDisplayData();
         </script></body></html>
     ''', center=center)
-
+    
 @app.route('/api/display-data/<int:center_id>')
 def api_display_data(center_id):
     conn = get_db_connection()
-    current = conn.execute('SELECT t.ticket_number, s.service_name, t.called_at FROM queue_tokens t JOIN services s ON t.service_id = s.id WHERE t.center_id = ? AND t.called_at IS NOT NULL ORDER BY t.called_at DESC LIMIT 1', (center_id,)).fetchone()
+    # إضافة t.id لجلب معرف التذكرة (ID)
+    query_current = '''
+        SELECT t.id, t.ticket_number, s.service_name, t.called_at 
+        FROM queue_tokens t 
+        JOIN services s ON t.service_id = s.id 
+        WHERE t.center_id = ? AND t.called_at IS NOT NULL 
+        ORDER BY t.called_at DESC LIMIT 1
+    '''
+    current = conn.execute(query_current, (center_id,)).fetchone()
+    
     history = conn.execute('SELECT t.ticket_number, s.service_name FROM queue_tokens t JOIN services s ON t.service_id = s.id WHERE t.center_id = ? AND t.status IN ("CALLED", "COMPLETED") ORDER BY t.called_at DESC LIMIT 5', (center_id,)).fetchall()
     videos = conn.execute('SELECT * FROM videos').fetchall()
     active_announcement = conn.execute('SELECT * FROM announcements WHERE is_active = 1 LIMIT 1').fetchone()
     conn.close()
+    
     return jsonify({
         'current': dict(current) if current else None,
         'history': [dict(h) for h in history],
