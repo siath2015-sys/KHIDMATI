@@ -1358,117 +1358,61 @@ def reset_tickets(center_id):
         
     return jsonify({'success': success, 'message': message})  
     
-@app.route('/track/<int:item_id>')
-def track_page(item_id):
+@app.route('/track/<int:ticket_id>')
+def track_ticket(ticket_id):
     conn = get_db_connection()
     
-    # 1. محاولة البحث عما إذا كان الـ ID يعود لتذكرة (Ticket)
+    # 1. جلب بيانات التذكرة المحددة مع اسم المصلحة واسم المركز
     ticket = conn.execute('''
         SELECT t.*, s.service_name, c.center_name 
-        FROM queue_tokens t 
-        JOIN services s ON t.service_id = s.id 
-        JOIN centers c ON t.center_id = c.id 
+        FROM queue_tokens t
+        JOIN services s ON t.service_id = s.id
+        JOIN centers c ON t.center_id = c.id
         WHERE t.id = ?
-    ''', (item_id,)).fetchone()
+    ''', (ticket_id,)).fetchone()
     
-    if ticket:
-        # حساب عدد التذاكر التي أمام هذا المواطن في الانتظار بطريقة آمنة
-        waiting_ahead = 0
-        if ticket['status'] == 'WAITING':
-            res = conn.execute('''
-                SELECT COUNT(*) as cnt 
-                FROM queue_tokens 
-                WHERE service_id = ? AND status = 'WAITING' 
-                  AND id < ?
-            ''', (ticket['service_id'], item_id)).fetchone()
-            waiting_ahead = res['cnt'] if res else 0
-        
+    if not ticket:
         conn.close()
-        
-        # عرض صفحة متابعة التذكرة الفردية
-        return render_template_string('''
-            <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>متابعة التذكرة - {{ ticket.ticket_number }}</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <meta http-equiv="refresh" content="5">
-            <style>
-                body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 15px; box-sizing: border-box; }
-                .card { background: #1e293b; padding: 25px; border-radius: 16px; text-align: center; width: 100%; max-width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
-                .ticket-num { font-size: 55px; font-weight: 900; color: #38bdf8; margin: 10px 0; }
-                .status-badge { display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; margin: 10px 0; }
-                .status-WAITING { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
-                .status-CALLED { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
-                .status-COMPLETED { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid #3b82f6; }
-                .info-text { font-size: 14px; color: #94a3b8; margin: 8px 0; }
-            </style></head>
-            <body>
-            <div class="card">
-                <h3 style="margin-top:0; color:#f59e0b;">{{ ticket.center_name }}</h3>
-                <div class="info-text">المصلحة: <b>{{ ticket.service_name }}</b></div>
-                <div style="font-size: 13px; color: #cbd5e1;">رقم التذكرة الخاصة بك</div>
-                <div class="ticket-num">{{ ticket.ticket_number }}</div>
-                <div>
-                    {% if ticket.status == 'WAITING' %}
-                        <span class="status-badge status-WAITING">⏳ في الانتظار</span>
-                        <div style="background: #0f172a; padding: 12px; border-radius: 10px; margin-top: 15px;">
-                            عدد التذاكر أمامك: <b style="color: #f59e0b; font-size: 18px;">{{ waiting_ahead }}</b>
-                        </div>
-                    {% elif ticket.status == 'CALLED' %}
-                        <span class="status-badge status-CALLED">📢 دورك الآن! توجه إلى الشباك</span>
-                    {% elif ticket.status == 'COMPLETED' %}
-                        <span class="status-badge status-COMPLETED">✅ تم خدمتكم وانتهت التذكرة</span>
-                    {% endif %}
-                </div>
-                <p style="font-size: 11px; color: #64748b; margin-top: 20px;">تتحدث هذه الصفحة تلقائياً لمتابعة دورك بسلاسة.</p>
-            </div>
-            </body></html>
-        ''', ticket=ticket, waiting_ahead=waiting_ahead)
+        return "<h2 style='text-align:center; font-family:Tahoma; margin-top:50px; color:#ef4444;'>عذراً، التذكرة غير موجودة أو انتهت صلاحيتها.</h2>", 404
 
-    # 2. إذا لم يكن تذكرة، نبحث عما إذا كان الـ ID يعود لمركز (Center)
-    center = conn.execute('SELECT * FROM centers WHERE id = ?', (item_id,)).fetchone()
-    if center:
-        current_ticket = conn.execute('''
-            SELECT t.*, s.service_name 
-            FROM queue_tokens t 
-            JOIN services s ON t.service_id = s.id 
-            WHERE t.center_id = ? AND t.status = 'CALLED' 
-            ORDER BY t.called_at DESC LIMIT 1
-        ''', (item_id,)).fetchone()
-
-        res_w = conn.execute('''
-            SELECT COUNT(*) as cnt FROM queue_tokens 
-            WHERE center_id = ? AND status = 'WAITING'
-        ''', (item_id,)).fetchone()
-        waiting_count = res_w['cnt'] if res_w else 0
-        
-        conn.close()
-
-        # عرض صفحة متابعة المركز العامة
-        return render_template_string('''
-            <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>متابعة المركز - {{ center.center_name }}</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <meta http-equiv="refresh" content="10">
-            <style>
-                body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 15px; box-sizing: border-box; }
-                .card { background: #1e293b; padding: 25px; border-radius: 16px; text-align: center; width: 100%; max-width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
-            </style></head>
-            <body>
-            <div class="card">
-                <h3 style="color:#38bdf8;">🏢 {{ center.center_name }}</h3>
-                <div style="font-size: 14px; color: #94a3b8; margin-top: 15px;">التذكرة الحالية قيد النداء:</div>
-                <div style="font-size: 50px; font-weight: 900; color: #fbbf24; margin: 10px 0;">
-                    {{ current_ticket.ticket_number if current_ticket else '---' }}
-                </div>
-                <div style="font-size: 14px; color: #cbd5e1;">{{ current_ticket.service_name if current_ticket else 'لا توجد تذكرة منداءة حالياً' }}</div>
-                <div style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; padding: 10px; border-radius: 8px; font-size: 14px; margin-top: 20px;">
-                    ⏳ قاعات الانتظار: <b style="color: #fbbf24;">{{ waiting_count }}</b> تذكرة تنتظر الدور.
-                </div>
-            </div>
-            </body></html>
-        ''', center=center, current_ticket=current_ticket, waiting_count=waiting_count)
-
+    # 2. حساب عدد التذاكر التي تنتظر قبل هذه التذكرة في نفس المركز ونفس الخدمة (أو المركز عموماً حسب نظامك)
+    res_w = conn.execute('''
+        SELECT COUNT(*) as cnt FROM queue_tokens 
+        WHERE center_id = ? AND service_id = ? AND status = 'WAITING' AND id < ?
+    ''', (ticket['center_id'], ticket['service_id'], ticket_id)).fetchone()
+    
+    waiting_count = res_w['cnt'] if res_w else 0
+    
     conn.close()
-    return "<h2 style='text-align:center; font-family:Tahoma; margin-top:50px; color:#ef4444;'>عذراً، الرابط غير صحيح أو العنصر غير موجود.</h2>", 404
 
+    # 3. عرض صفحة متابعة التذكرة للمواطن
+    return render_template_string('''
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>متابعة تذكرتك - {{ ticket.ticket_number }}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="refresh" content="10">
+        <style>
+            body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 15px; box-sizing: border-box; }
+            .card { background: #1e293b; padding: 25px; border-radius: 16px; text-align: center; width: 100%; max-width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
+        </style></head>
+        <body>
+        <div class="card">
+            <h3 style="color:#38bdf8;">🏢 {{ ticket.center_name }}</h3>
+            <div style="font-size: 14px; color: #94a3b8; margin-top: 10px;">مصلحة: <b style="color:#fff;">{{ ticket.service_name }}</b></div>
+            <div style="font-size: 14px; color: #94a3b8; margin-top: 15px;">رقم تذكرتك:</div>
+            <div style="font-size: 50px; font-weight: 900; color: #fbbf24; margin: 10px 0;">
+                {{ ticket.ticket_number }}
+            </div>
+            <div style="font-size: 14px; color: #cbd5e1; margin-bottom: 15px;">الحالة الحالية: 
+                <span style="color: {% if ticket.status == 'CALLED' %}#4ade80{% else %}#fbbf24{% endif %}; font-weight: bold;">
+                    {% if ticket.status == 'CALLED' %}قيد النداء حالياً!{% else %}في الانتظار{% endif %}
+                </span>
+            </div>
+            <div style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; padding: 12px; border-radius: 8px; font-size: 14px; margin-top: 20px;">
+                ⏳ الأشخاص أمامك في الانتظار: <b style="color: #fbbf24; font-size: 18px;">{{ waiting_count }}</b>
+            </div>
+        </div>
+        </body></html>
+    ''', ticket=ticket, waiting_count=waiting_count)
 from flask import send_file, request, redirect, url_for, session
 
 # مسار لتحميل نسخة احتياطية لقاعدة البيانات
