@@ -671,19 +671,7 @@ def display_screen(center_id):
         <div class="ticker-wrap"><div class="ticker" id="announcementTicker">مرحباً بكم في مديرية الضرائب لولاية ميلة - المركز الجواري يرحب بكم</div></div>
 
         <script>
-            window.onload = function() {
-    // ضع رابط موقعك الحقيقي هنا مباشرة
-    let trackUrl = "https://khidma-6ozh.onrender.com/track/{{ center.id }}"; 
-    
-    new QRCode(document.getElementById("qrcode"), {
-        text: trackUrl,
-        width: 75,
-        height: 75,
-        colorDark : "#0f172a",
-        colorLight : "#ffffff",
-        correctLevel : QRCode.CorrectLevel.H
-    });
-};
+            let currentTicketId = null; // متغير لتتبع معرّف التذكرة الحالية وتجنب إعادة توليد الـ QR بلا داعٍ
 
             function updateClock() {
                 const now = new Date();
@@ -774,16 +762,50 @@ def display_screen(center_id):
 
             function fetchDisplayData() {
                 fetch('/api/display-data/{{ center.id }}').then(res => res.json()).then(data => {
+                    let qrEl = document.getElementById("qrcode");
+
                     if (data.current) {
                         let tNum = data.current.ticket_number, sName = data.current.service_name;
+                        let tId = data.current.id; // معرّف التذكرة الحالية في قاعدة البيانات
+
+                        // تحديث الـ QR Code فقط إذا تغيرت التذكرة الحالية
+                        if (currentTicketId !== tId) {
+                            currentTicketId = tId;
+                            qrEl.innerHTML = ""; // تفريغ الـ QR القديم
+                            
+                            let trackUrl = `${window.location.origin}/track/${tId}`;
+                            new QRCode(qrEl, {
+                                text: trackUrl,
+                                width: 75,
+                                height: 75,
+                                colorDark : "#0f172a",
+                                colorLight : "#ffffff",
+                                correctLevel : QRCode.CorrectLevel.H
+                            });
+                        }
+
                         document.getElementById('currTicket').innerText = tNum;
                         document.getElementById('currService').innerText = sName;
+                        
                         let uniqueKey = tNum + '-' + data.current.called_at;
                         if (lastSpokenTicket !== uniqueKey) { lastSpokenTicket = uniqueKey; playAnnouncementSoundAndSpeech(tNum, sName); }
                     } else {
+                        currentTicketId = null;
                         document.getElementById('currTicket').innerText = '---';
                         document.getElementById('currService').innerText = 'لا توجد تذكرة حالية';
+                        
+                        // في حالة عدم وجود تذكرة، نعرض QR الخاص برابط المركز العام كبديل افتراضي
+                        qrEl.innerHTML = "";
+                        new QRCode(qrEl, {
+                            text: `${window.location.origin}/track/{{ center.id }}`,
+                            width: 75,
+                            height: 75,
+                            colorDark : "#0f172a",
+                            colorLight : "#ffffff",
+                            correctLevel : QRCode.CorrectLevel.H
+                        });
                     }
+
                     let historyList = document.getElementById('historyList'); historyList.innerHTML = '';
                     if (data.history) {
                         data.history.forEach(h => {
