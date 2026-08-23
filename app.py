@@ -642,43 +642,7 @@ def display_screen(center_id):
                     <div id="historyList" style="overflow-y:auto; flex-grow:1;"></div>
                 </div>
             </div>
-            <!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <title>شاشة النداء الآلي</title>
-    <style>
-        body { background: #090d16; color: #fff; font-family: Tahoma; text-align: center; padding: 50px; margin: 0; }
-        .display-box { background: #1e293b; border: 3px solid #38bdf8; border-radius: 20px; padding: 40px; max-width: 600px; margin: auto; box-shadow: 0 0 40px rgba(56, 189, 248, 0.3); }
-        .ticket-large { font-size: 100px; font-weight: bold; color: #fbbf24; margin: 20px 0; }
-        .counter-name { font-size: 30px; color: #4ade80; }
-    </style>
-</head>
-<body>
-    <div class="display-box">
-        <h2>رقم التذكرة قيد النداء</h2>
-        <div id="display-ticket" class="ticket-large">---</div>
-        <div class="counter-name">الشباك / المصلحة: <span id="display-counter">انتظار النداء...</span></div>
-    </div>
 
-<script>
-    function updatePublicDisplay() {
-        // استبدل رقم 1 بمعرف المركز (center_id) الخاص بك حسب الحاجة
-        fetch('/api/live-display/1')
-            .then(res => res.json())
-            .then(data => {
-                if(data.success) {
-                    document.getElementById('display-ticket').innerText = data.ticket_number;
-                    document.getElementById('display-counter').innerText = data.counter_name + ' (' + data.service_name + ')';
-                }
-            }).catch(err => console.log('خطأ في تحديث شاشة العرض'));
-    }
-
-    // تحديث الشاشة العامة كل ثانية واحدة
-    setInterval(updatePublicDisplay, 1000);
-</script>
-</body>
-</html>
             <div class="video-section">
                 <div class="video-container" id="videoBox"><p style="color:#94a3b8;">جاري تحميل مشغل الفيديوهات...</p></div>
                 <div class="video-controls">
