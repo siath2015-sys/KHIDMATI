@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, render_template_string
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, render_template_string, send_file
 import sqlite3
 from datetime import datetime
 
@@ -167,7 +167,7 @@ def login():
 @app.route('/system-dashboard', methods=['GET', 'POST'])
 def system_dashboard():
     if session.get('role') != 'system_admin':
-        return "غير مصرح لك بالوصول إلى لوحة تحكم المسؤول!", 403[cite: 1]
+        return "غير مصرح لك بالوصول إلى لوحة تحكم المسؤول!", 403
 
     conn = get_db_connection()
        
@@ -276,34 +276,29 @@ def system_dashboard():
             <h2>🛠️ لوحة تحكم مسؤول النظام (التحكم الكامل بالحذف والتعديل والإضافة)</h2>
             <a href="/logout" class="logout-btn"><span>تسجيل الخروج</span> 🚪</a>
         </div>
-<div style="background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #334155; color: #fff; font-family: Tahoma;">
-    <h3 style="margin-top: 0; color: #38bdf8;">💾 إدارة النسخ الاحتياطي لقاعدة البيانات والإحصائيات</h3>
-    
-    <!-- زر تحميل النسخة الاحتياطية -->
-    <div style="margin-bottom: 15px;">
-        <p style="font-size: 14px; color: #94a3b8;">قم بتحميل نسخة احتياطية من قاعدة البيانات على حاسوبك قبل إجراء أي تحديث:</p>
-        <a href="/admin/backup-db" style="background: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">📥 تحميل النسخة الاحتياطية (Backup)</a>
-    </div>
-
-    <hr style="border-color: #334155; margin: 15px 0;">
-
-    <!-- نموذج استرجاع النسخة الاحتياطية -->
-    <div>
-        <p style="font-size: 14px; color: #94a3b8;">استرجاع قاعدة البيانات السابقة بعد التحديث:</p>
-        <form action="/admin/restore-db" method="POST" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center;">
-            <input type="file" name="db_file" accept=".db" required style="color: #cbd5e1; background: #0f172a; padding: 8px; border-radius: 6px; border: 1px solid #475569;">
-            <button type="submit" style="background: #f59e0b; color: #000; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;">🔄 استرجاع القاعدة (Restore)</button>
-        </form>
-    </div>
-</div>
-
         
-         <div class="card">
+        <div style="background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #334155; color: #fff; font-family: Tahoma;">
+            <h3 style="margin-top: 0; color: #38bdf8;">💾 إدارة النسخ الاحتياطي لقاعدة البيانات والإحصائيات</h3>
+            <div style="margin-bottom: 15px;">
+                <p style="font-size: 14px; color: #94a3b8;">قم بتحميل نسخة احتياطية من قاعدة البيانات على حاسوبك قبل إجراء أي تحديث:</p>
+                <a href="/admin/backup-db" style="background: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">📥 تحميل النسخة الاحتياطية (Backup)</a>
+            </div>
+            <hr style="border-color: #334155; margin: 15px 0;">
+            <div>
+                <p style="font-size: 14px; color: #94a3b8;">استرجاع قاعدة البيانات السابقة بعد التحديث:</p>
+                <form action="/admin/restore-db" method="POST" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center;">
+                    <input type="file" name="db_file" accept=".db" required style="color: #cbd5e1; background: #0f172a; padding: 8px; border-radius: 6px; border: 1px solid #475569;">
+                    <button type="submit" style="background: #f59e0b; color: #000; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;">🔄 استرجاع القاعدة (Restore)</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
             <a href="/system/all-displays" target="_blank" class="btn-dash">🖥️ عرض شاشات كل المراكز</a>
             <a href="/system/dashboard-stats" target="_blank" class="btn-dash" style="background: #3b82f6;">📊 لوحة إحصائيات المديرية (Tableau de Bord)</a>
         </div> 
 
-       <div class="card">
+        <div class="card">
             <h3>📢 إدارة الشريط الإعلاني المتحرك</h3>
             <form method="POST">
                 <input type="hidden" name="action" value="add_announcement">
@@ -555,7 +550,6 @@ def display_screen(center_id):
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>شاشة العرض - {{ center.center_name }}</title>
         <script src="https://www.youtube.com/iframe_api"></script>
-        <!-- مكتبة توليد QR Code -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
             window.addEventListener("pageshow", function (event) {
@@ -589,37 +583,28 @@ def display_screen(center_id):
             }
             .center-badge { color: #0284c7; font-size: 20px; font-weight: bold; }
             .header-left { display: flex; align-items: center; gap: 15px; }
-            
             .datetime-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 5px 15px; border-radius: 8px; text-align: center; }
             .current-time { font-size: 16px; font-weight: bold; color: #0f172a; font-family: monospace; }
             .current-date { font-size: 11px; color: #64748b; }
-
             .main-content { display: flex; gap: 15px; flex-grow: 1; margin-top: 10px; height: calc(100vh - 115px); }
             .right-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; }
-            
             .current-box { background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px; text-align: center; border: 2px solid rgba(255, 255, 255, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; }
             .current-ticket { font-size: 80px; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(255,255,255,0.6); margin: 0; line-height: 1; }
             .current-service { font-size: 18px; color: var(--gold); font-weight: bold; margin-top: 5px; margin-bottom: 8px; }
-            
             .qr-direct-container { display: flex; align-items: center; justify-content: center; gap: 12px; background: rgba(255, 255, 255, 0.9); padding: 6px 15px; border-radius: 10px; width: fit-content; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
             .qr-text-side { text-align: right; }
             .qr-title-main { font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
             .qr-sub-text { font-size: 11px; color: #475569; font-weight: 600; }
-
             .pulse { animation: pulse-animation 1.5s infinite; }
             @keyframes pulse-animation { 0% { transform: scale(1); } 50% { transform: scale(1.04); } 100% { transform: scale(1); } }
-            
             .history-box { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px; border: 2px solid rgba(255, 255, 255, 0.2); flex-grow: 1; display: flex; flex-direction: column; }
             .history-title { font-size: 14px; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px; margin-bottom: 6px; text-align: center; font-weight: bold; }
             .history-item { background: rgba(0, 0, 0, 0.25); color: #fff; padding: 6px 10px; border-radius: 6px; margin-bottom: 5px; display: flex; justify-content: space-between; font-size: 13px; border-right: 4px solid var(--gold); }
-            
             .video-section { flex: 2; display: flex; flex-direction: column; background: #000; border-radius: 12px; overflow: hidden; border: 3px solid rgba(255, 255, 255, 0.3); }
             .video-container { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-            
             .video-controls { background: #1e293b; padding: 8px 15px; display: flex; gap: 10px; justify-content: center; align-items: center; border-top: 1px solid #334155; }
             .video-controls button { background: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.2s; }
             .video-controls button:hover { background: #0ea5e9; }
-            
             .ticker-wrap { background: #ffffff; color: #dc2626; padding: 8px 15px; border-radius: 8px; margin-top: 8px; overflow: hidden; white-space: nowrap; font-size: 18px; border: 2px solid #cbd5e1; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
             .ticker { display: inline-block; padding-left: 100%; animation: ticker 28s linear infinite; }
             @keyframes ticker { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
@@ -644,11 +629,9 @@ def display_screen(center_id):
                     <div id="currService" class="current-service">لا توجد تذكرة حالية</div>
                     
                     <div class="qr-direct-container">
-                        <div id="qrcode-container">
-                            <div id="qrcode" style="width: 75px; height: 75px;"></div>
-                        </div>
+                        <div id="qrcode" style="width: 75px; height: 75px;"></div>
                         <div class="qr-text-side">
-                            <div class="qr-title-main">تابع تذكرتك عبر هاتفك</div>
+                            <div class="qr-title-main">تابع دورك عبر هاتفك</div>
                             <div class="qr-sub-text">وجه كاميرا الهاتف هنا</div>
                         </div>
                     </div>
@@ -772,7 +755,7 @@ def display_screen(center_id):
 
             function fetchDisplayData() {
                 fetch('/api/display-data/{{ center.id }}').then(res => res.json()).then(data => {
-                    let container = document.getElementById("qrcode-container");
+                    let qrEl = document.getElementById("qrcode");
 
                     if (data.current && data.current.id) {
                         let tNum = data.current.ticket_number;
@@ -781,10 +764,10 @@ def display_screen(center_id):
 
                         if (currentTicketId !== tId) {
                             currentTicketId = tId;
-                            container.innerHTML = '<div id="qrcode" style="width: 75px; height: 75px;"></div>';
+                            qrEl.innerHTML = ""; 
                             
                             let trackUrl = `${window.location.origin}/track/${tId}`;
-                            new QRCode(document.getElementById("qrcode"), {
+                            new QRCode(qrEl, {
                                 text: trackUrl,
                                 width: 75,
                                 height: 75,
@@ -807,9 +790,9 @@ def display_screen(center_id):
                         document.getElementById('currTicket').innerText = '---';
                         document.getElementById('currService').innerText = 'لا توجد تذكرة حالية';
                         
-                        container.innerHTML = '<div id="qrcode" style="width: 75px; height: 75px;"></div>';
-                        new QRCode(document.getElementById("qrcode"), {
-                            text: `${window.location.origin}/display/{{ center.id }}`,
+                        qrEl.innerHTML = "";
+                        new QRCode(qrEl, {
+                            text: `${window.location.origin}/track/{{ center.id }}`,
                             width: 75,
                             height: 75,
                             colorDark : "#0f172a",
@@ -837,7 +820,6 @@ def display_screen(center_id):
 @app.route('/api/display-data/<int:center_id>')
 def api_display_data(center_id):
     conn = get_db_connection()
-    # إضافة t.id لجلب معرف التذكرة (ID)
     query_current = '''
         SELECT t.id, t.ticket_number, s.service_name, t.called_at 
         FROM queue_tokens t 
@@ -868,7 +850,6 @@ def kiosk_machine(center_id):
     
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>سحب تذكرة - {{ center.center_name }}</title>
-        <!-- مكتبة توليد QR Code -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <style>
             body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; direction: rtl; }
@@ -876,11 +857,9 @@ def kiosk_machine(center_id):
             .priority-box { background: rgba(245, 158, 11, 0.15); border: 2px dashed #f59e0b; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; }
             .priority-box label { color: #fbbf24; font-weight: bold; font-size: 15px; cursor: pointer; }
             .priority-box input { width: 20px; height: 20px; accent-color: #f59e0b; cursor: pointer; }
-            
             .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; }
             .ticket-card { background: #fff; color: #000; padding: 25px; border-radius: 14px; width: 340px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); font-family: Tahoma; }
             .ticket-card h2 { margin: 0 0 5px; color: #1e293b; font-size: 20px; }
-            
             .service-highlight {
                 background: #f0fdf4;
                 border: 2px dashed #16a34a;
@@ -892,13 +871,11 @@ def kiosk_machine(center_id):
                 margin: 12px 0;
                 box-shadow: 0 4px 10px rgba(22, 163, 74, 0.1);
             }
-
             .ticket-number { font-size: 50px; font-weight: 900; color: #0284c7; margin: 5px 0; letter-spacing: 2px; }
             .ticket-info { font-size: 13px; color: #64748b; margin-bottom: 10px; }
             #qrcode { display: flex; justify-content: center; margin: 10px 0; }
             .btn-print { background: #10b981; color: #fff; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px; }
             .btn-close { background: #ef4444; color: #fff; border: none; padding: 8px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 8px; }
-            
             @media print {
                 body * { visibility: hidden; }
                 .ticket-card, .ticket-card * { visibility: visible; }
@@ -907,15 +884,12 @@ def kiosk_machine(center_id):
             }
         </style></head>
         <body>
-        
         <div class="box">
             <h2>🎫 سحب تذكرة - {{ center.center_name }}</h2>
-            
             <div class="priority-box">
                 <input type="checkbox" id="isPriority">
                 <label for="isPriority">♿ ذوي الاحتياجات الخاصة (أولوية في الطابور)</label>
             </div>
-
             {% for s in services %}
             <button onclick="issueTicket({{ s.id }})" style="display:block; width:100%; background:#3b82f6; color:#fff; padding:15px; margin:12px 0; border:none; border-radius:8px; font-weight:bold; font-size:16px; cursor:pointer;">{{ s.service_name }}</button>
             {% endfor %}
@@ -1149,7 +1123,6 @@ def dashboard_stats():
     end_date = request.args.get('end_date', '')
 
     conn = get_db_connection()
-    
     query = '''
         SELECT c.center_name, 
                COUNT(t.id) as total_tickets,
@@ -1159,14 +1132,12 @@ def dashboard_stats():
         LEFT JOIN services s ON c.id = s.center_id
         LEFT JOIN queue_tokens t ON s.id = t.service_id
     '''
-    
     params = []
     if start_date and end_date:
         query += ' WHERE DATE(t.created_at) BETWEEN ? AND ?'
         params.extend([start_date, end_date])
         
     query += ' GROUP BY c.id, c.center_name'
-    
     stats = conn.execute(query, params).fetchall()
     conn.close()
 
@@ -1383,8 +1354,6 @@ def reset_tickets(center_id):
 @app.route('/track/<int:ticket_id>')
 def track_ticket(ticket_id):
     conn = get_db_connection()
-    
-    # 1. جلب بيانات التذكرة المحددة مع اسم المصلحة واسم المركز
     ticket = conn.execute('''
         SELECT t.*, s.service_name, c.center_name 
         FROM queue_tokens t
@@ -1397,17 +1366,14 @@ def track_ticket(ticket_id):
         conn.close()
         return "<h2 style='text-align:center; font-family:Tahoma; margin-top:50px; color:#ef4444;'>عذراً، التذكرة غير موجودة أو انتهت صلاحيتها.</h2>", 404
 
-    # 2. حساب عدد التذاكر التي تنتظر قبل هذه التذكرة في نفس المركز ونفس الخدمة (أو المركز عموماً حسب نظامك)
     res_w = conn.execute('''
         SELECT COUNT(*) as cnt FROM queue_tokens 
         WHERE center_id = ? AND service_id = ? AND status = 'WAITING' AND id < ?
     ''', (ticket['center_id'], ticket['service_id'], ticket_id)).fetchone()
     
     waiting_count = res_w['cnt'] if res_w else 0
-    
     conn.close()
 
-    # 3. عرض صفحة متابعة التذكرة للمواطن
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>متابعة تذكرتك - {{ ticket.ticket_number }}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1435,19 +1401,15 @@ def track_ticket(ticket_id):
         </div>
         </body></html>
     ''', ticket=ticket, waiting_count=waiting_count)
-from flask import send_file, request, redirect, url_for, session
 
-# مسار لتحميل نسخة احتياطية لقاعدة البيانات
+# مسار لتحميل نسخة احتياطية لقاعدة البيانات (تم نقله إلى النطاق الصحيح)
 @app.route('/admin/backup-db')
 def backup_database():
-    # التأكد أن المستخدم المدير العام هو من يقوم بالتحميل لأسباب أمنية
     if session.get('role') != 'system_admin':
         return "غير مصرح لك بالقيام بهذا الإجراء", 403
-    
-    # إرسال ملف قاعدة البيانات للتحميل مباشرة إلى حاسوبك
     return send_file('tax-queue-db.db', as_attachment=True)
 
-# مسار لاسترجاع ورفع النسخة الاحتياطية
+# مسار لاسترجاع ورفع النسخة الاحتياطية (تم نقله إلى النطاق الصحيح)
 @app.route('/admin/restore-db', methods=['POST'])
 def restore_database():
     if session.get('role') != 'system_admin':
@@ -1461,9 +1423,8 @@ def restore_database():
         return "اسم الملف فارغ", 400
     
     if file:
-        # حفظ الملف فوق القاعدة القديمة واستبدالها بالكامل
         file.save('tax-queue-db.db')
-        return "تم استرجاع قاعدة البيانات والإحصائيات بنجاح! يمكنك العودة للنظام."
+        return "تم استرجاع قاعدة البيانات والإحصائيات بنجاح! يمكنك العودة للنظام عبر <a href='/system-dashboard'>لوحة التحكم</a>."
 
     return "حدث خطأ أثناء رفع الملف", 500
 
