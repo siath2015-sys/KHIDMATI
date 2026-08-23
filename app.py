@@ -1351,81 +1351,44 @@ def reset_tickets(center_id):
         
     return jsonify({'success': success, 'message': message})  
     
-@app.route('/track/<int:ticket_id>')
-def track_ticket(ticket_id):
+@app.route('/track/<int:token_id>')
+def track_token(token_id):
     conn = get_db_connection()
-    
-    # جلب تفاصيل التذكرة والمركز والمصلحة
-    ticket = conn.execute('''
-        SELECT t.*, c.name as center_name, s.name as service_name 
-        FROM queue_tokens t
-        JOIN centers c ON t.center_id = c.id
-        JOIN services s ON t.service_id = s.id
+    # استعلام جلب معلومات التذكرة وحالتها ومكانها لتتبعها عبر الهاتف
+    token = conn.execute('''
+        SELECT t.*, s.service_name, c.center_name 
+        FROM queue_tokens t 
+        JOIN services s ON t.service_id = s.id 
+        JOIN centers c ON t.center_id = c.id 
         WHERE t.id = ?
-    ''', (ticket_id,)).fetchone()
-
-    if not ticket:
-        conn.close()
-        return "<h2 style='text-align:center; font-family:Tahoma; margin-top:50px; color:#ef4444;'>عذراً، التذكرة غير موجودة أو انتهت صلاحيتها.</h2>", 404
-
-    # حساب عدد الأشخاص المنتظرين قبل هذه التذكرة في نفس المصلحة والمركز
-    res_w = conn.execute('''
-        SELECT COUNT(*) as cnt FROM queue_tokens 
-        WHERE center_id = ? AND service_id = ? AND status = 'WAITING' AND id < ?
-    ''', (ticket['center_id'], ticket['service_id'], ticket_id)).fetchone()
-
-    waiting_count = res_w['cnt'] if res_w else 0
+    ''', (token_id,)).fetchone()
     conn.close()
-
+    
+    if not token:
+        return "التذكرة غير موجودة أو انتهت صلاحيتها", 404
+        
+    # يمكنك عرض صفحة بسيطة للمواطن يتابع فيها دوره
     return render_template_string('''
-        <!DOCTYPE html>
-        <html lang="ar" dir="rtl">
-        <head>
-            <meta charset="UTF-8">
-            <title>متابعة تذكرتك - {{ ticket.ticket_number }}</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 15px; box-sizing: border-box; }
-                .card { background: #1e293b; padding: 25px; border-radius: 16px; text-align: center; width: 100%; max-width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
-            </style>
+        <!DOCTYPE html><html lang="ar" dir="rtl">
+        <head><meta charset="UTF-8"><title>متابعة دور التذكرة</title>
+        <style>
+            body { background: #0f172a; color: #fff; font-family: Tahoma; text-align: center; padding: 30px; }
+            .card { background: #1e293b; border: 2px solid #38bdf8; border-radius: 15px; padding: 25px; max-width: 400px; margin: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+            .ticket-num { font-size: 60px; color: #fbbf24; font-weight: bold; margin: 10px 0; }
+            .info { font-size: 18px; margin: 10px 0; color: #e2e8f0; }
+        </style>
         </head>
         <body>
-        <div class="card">
-            <h3 style="color:#38bdf8;">🏢 {{ ticket.center_name }}</h3>
-            <div style="font-size: 14px; color: #94a3b8; margin-top: 10px;">مصلحة: <b style="color:#fff;">{{ ticket.service_name }}</b></div>
-            <div style="font-size: 14px; color: #94a3b8; margin-top: 15px;">رقم تذكرتك:</div>
-            <div style="font-size: 50px; font-weight: 900; color: #fbbf24; margin: 10px 0;">
-                {{ ticket.ticket_number }}
+            <div class="card">
+                <h2>متابعة الدور الآلي</h2>
+                <div class="info">المركز: {{ token.center_name }}</div>
+                <div class="ticket-num">{{ token.ticket_number }}</div>
+                <div class="info">المصلحة: {{ token.service_name }}</div>
+                <div class="info" style="margin-top: 20px; font-size: 14px; color: #38bdf8;">حالة التذكرة الحالية: {{ token.status }}</div>
             </div>
-            <div style="font-size: 14px; color: #cbd5e1; margin-bottom: 15px;">الحالة الحالية: 
-                <span id="ticket-status" style="font-weight: bold; color: {% if ticket.status == 'CALLED' %}#4ade80{% else %}#fbbf24{% endif %};">
-                    {% if ticket.status == 'CALLED' %}قيد النداء حالياً! يرجى التوجه للمصلحة{% else %}في الانتظار{% endif %}
-                </span>
-            </div>
-            <div style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; padding: 12px; border-radius: 8px; font-size: 14px; margin-top: 20px;">
-                ⏳ الأشخاص أمامك في الانتظار: <b id="waiting-count" style="color: #fbbf24; font-size: 18px;">{{ waiting_count }}</b>
-            </div>
-        </div>
-
-        <script>
-            // التحديث الذاتي الفوري كل ثانيتين بدون إعادة تحميل الصفحة بالكامل
-            setInterval(function() {
-                fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-                    .then(response => response.text())
-                    .then(html => {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(html, 'text/html');
-                        
-                        // تحديث الحالة وعدد المنتظرين تلقائياً
-                        document.getElementById('ticket-status').innerHTML = doc.getElementById('ticket-status').innerHTML;
-                        document.getElementById('ticket-status').style.color = doc.getElementById('ticket-status').style.color;
-                        document.getElementById('waiting-count').innerHTML = doc.getElementById('waiting-count').innerHTML;
-                    }).catch(err => console.log('خطأ في الاتصال:', err));
-            }, 2000);
-        </script>
         </body>
         </html>
-    ''', ticket=ticket, waiting_count=waiting_count)
+    ''', token=token)
 
 @app.route('/api/live-display/<int:center_id>')
 def api_live_display(center_id):
