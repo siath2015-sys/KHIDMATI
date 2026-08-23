@@ -779,7 +779,6 @@ def display_screen(center_id):
                         let sName = data.current.service_name;
                         let tId = data.current.id; 
 
-                        // التحديث القسري لـ QR Code عبر إعادة بناء حاويته بالكامل عند كل تغير للـ ID
                         if (currentTicketId !== tId) {
                             currentTicketId = tId;
                             container.innerHTML = '<div id="qrcode" style="width: 75px; height: 75px;"></div>';
