@@ -777,11 +777,11 @@ def display_screen(center_id):
                         let sName = data.current.service_name;
                         let tId = data.current.id; 
 
+                        // تم تصحيح وإجبار الـ QR على التحديث فوراً عند تغير معرف التذكرة (tId)
                         if (currentTicketId !== tId) {
                             currentTicketId = tId;
                             qrEl.innerHTML = ""; 
                             
-                            // ربط الـ QR بمسار تتبع التذكرة الفردية الذي أنشأته (/track/<id>)
                             let trackUrl = `${window.location.origin}/track/${tId}`;
                             new QRCode(qrEl, {
                                 text: trackUrl,
