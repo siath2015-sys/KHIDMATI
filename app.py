@@ -646,7 +646,7 @@ def display_screen(center_id):
                     <div class="qr-direct-container">
                         <div id="qrcode" style="width: 75px; height: 75px;"></div>
                         <div class="qr-text-side">
-                            <div class="qr-title-main">تابع دورك عبر هاتفك</div>
+                            <div class="qr-title-main">تابع تذكرتك عبر هاتفك</div>
                             <div class="qr-sub-text">وجه كاميرا الهاتف هنا</div>
                         </div>
                     </div>
@@ -781,6 +781,7 @@ def display_screen(center_id):
                             currentTicketId = tId;
                             qrEl.innerHTML = ""; 
                             
+                            // ربط الـ QR بمسار تتبع التذكرة الفردية الذي أنشأته (/track/<id>)
                             let trackUrl = `${window.location.origin}/track/${tId}`;
                             new QRCode(qrEl, {
                                 text: trackUrl,
@@ -807,7 +808,7 @@ def display_screen(center_id):
                         
                         qrEl.innerHTML = "";
                         new QRCode(qrEl, {
-                            text: `${window.location.origin}/track/{{ center.id }}`,
+                            text: `${window.location.origin}/display/{{ center.id }}`,
                             width: 75,
                             height: 75,
                             colorDark : "#0f172a",
