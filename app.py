@@ -644,7 +644,9 @@ def display_screen(center_id):
                     <div id="currService" class="current-service">لا توجد تذكرة حالية</div>
                     
                     <div class="qr-direct-container">
-                        <div id="qrcode" style="width: 75px; height: 75px;"></div>
+                        <div id="qrcode-container">
+                            <div id="qrcode" style="width: 75px; height: 75px;"></div>
+                        </div>
                         <div class="qr-text-side">
                             <div class="qr-title-main">تابع تذكرتك عبر هاتفك</div>
                             <div class="qr-sub-text">وجه كاميرا الهاتف هنا</div>
@@ -770,20 +772,20 @@ def display_screen(center_id):
 
             function fetchDisplayData() {
                 fetch('/api/display-data/{{ center.id }}').then(res => res.json()).then(data => {
-                    let qrEl = document.getElementById("qrcode");
+                    let container = document.getElementById("qrcode-container");
 
                     if (data.current && data.current.id) {
                         let tNum = data.current.ticket_number;
                         let sName = data.current.service_name;
                         let tId = data.current.id; 
 
-                        // تم تصحيح وإجبار الـ QR على التحديث فوراً عند تغير معرف التذكرة (tId)
+                        // التحديث القسري لـ QR Code عبر إعادة بناء حاويته بالكامل عند كل تغير للـ ID
                         if (currentTicketId !== tId) {
                             currentTicketId = tId;
-                            qrEl.innerHTML = ""; 
+                            container.innerHTML = '<div id="qrcode" style="width: 75px; height: 75px;"></div>';
                             
                             let trackUrl = `${window.location.origin}/track/${tId}`;
-                            new QRCode(qrEl, {
+                            new QRCode(document.getElementById("qrcode"), {
                                 text: trackUrl,
                                 width: 75,
                                 height: 75,
@@ -806,8 +808,8 @@ def display_screen(center_id):
                         document.getElementById('currTicket').innerText = '---';
                         document.getElementById('currService').innerText = 'لا توجد تذكرة حالية';
                         
-                        qrEl.innerHTML = "";
-                        new QRCode(qrEl, {
+                        container.innerHTML = '<div id="qrcode" style="width: 75px; height: 75px;"></div>';
+                        new QRCode(document.getElementById("qrcode"), {
                             text: `${window.location.origin}/display/{{ center.id }}`,
                             width: 75,
                             height: 75,
