@@ -820,27 +820,39 @@ def display_screen(center_id):
 @app.route('/api/display-data/<int:center_id>')
 def api_display_data(center_id):
     conn = get_db_connection()
+    
+    # 1. جلب التذكرة الحالية الخاصة بيوم اليوم فقط
     query_current = '''
-        SELECT t.id, t.ticket_number, s.service_name, t.called_at 
-        FROM queue_tokens t 
-        JOIN services s ON t.service_id = s.id 
+        SELECT t.id, t.ticket_number, s.service_name, t.called_at
+        FROM queue_tokens t
+        JOIN services s ON t.service_id = s.id
         WHERE t.center_id = ? AND t.called_at IS NOT NULL 
+        AND DATE(t.called_at) = DATE('now', 'localtime')
         ORDER BY t.called_at DESC LIMIT 1
     '''
     current = conn.execute(query_current, (center_id,)).fetchone()
+
+    # 2. جلب سجل آخر التذاكر المنداة أو المنجزة الخاصة بيوم اليوم فقط
+    query_history = '''
+        SELECT t.ticket_number, s.service_name 
+        FROM queue_tokens t 
+        JOIN services s ON t.service_id = s.id 
+        WHERE t.center_id = ? AND t.status IN ("CALLED", "COMPLETED")
+        AND DATE(t.called_at) = DATE('now', 'localtime')
+        ORDER BY t.called_at DESC LIMIT 5
+    '''
+    history = conn.execute(query_history, (center_id,)).fetchall()
     
-    history = conn.execute('SELECT t.ticket_number, s.service_name FROM queue_tokens t JOIN services s ON t.service_id = s.id WHERE t.center_id = ? AND t.status IN ("CALLED", "COMPLETED") ORDER BY t.called_at DESC LIMIT 5', (center_id,)).fetchall()
     videos = conn.execute('SELECT * FROM videos').fetchall()
     active_announcement = conn.execute('SELECT * FROM announcements WHERE is_active = 1 LIMIT 1').fetchone()
     conn.close()
-    
+
     return jsonify({
         'current': dict(current) if current else None,
         'history': [dict(h) for h in history],
         'videos': [dict(v) for v in videos],
         'active_announcement': dict(active_announcement) if active_announcement else None
     })
-
 @app.route('/kiosk/<int:center_id>')
 def kiosk_machine(center_id):
     conn = get_db_connection()
