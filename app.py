@@ -766,7 +766,7 @@ def display_screen(center_id):
                             currentTicketId = tId;
                             qrEl.innerHTML = ""; 
                             
-                            let trackUrl = `${window.location.origin}/track/${tId}`;
+                            let trackUrl = `${window.location.origin}/track-center/{{ center.id }}`;
                             new QRCode(qrEl, {
                                 text: trackUrl,
                                 width: 75,
@@ -1351,91 +1351,121 @@ def reset_tickets(center_id):
         
     return jsonify({'success': success, 'message': message})  
     
-@app.route('/track/<int:center_id>')
-def track_center(center_id):
+@app.route('/track/<int:ticket_id>')
+def track_ticket(ticket_id):
+    conn = get_db_connection()
+    
+    # 1. جلب بيانات التذكرة المحددة مع اسم المصلحة واسم المركز
+    ticket = conn.execute('''
+        SELECT t.*, s.service_name, c.center_name 
+        FROM queue_tokens t
+        JOIN services s ON t.service_id = s.id
+        JOIN centers c ON t.center_id = c.id
+        WHERE t.id = ?
+    ''', (ticket_id,)).fetchone()
+    
+    if not ticket:
+        conn.close()
+        return "<h2 style='text-align:center; font-family:Tahoma; margin-top:50px; color:#ef4444;'>عذراً، التذكرة غير موجودة أو انتهت صلاحيتها.</h2>", 404
+
+    # 2. حساب عدد التذاكر التي تنتظر قبل هذه التذكرة في نفس المركز ونفس الخدمة (أو المركز عموماً حسب نظامك)
+    res_w = conn.execute('''
+        SELECT COUNT(*) as cnt FROM queue_tokens 
+        WHERE center_id = ? AND service_id = ? AND status = 'WAITING' AND id < ?
+    ''', (ticket['center_id'], ticket['service_id'], ticket_id)).fetchone()
+    
+    waiting_count = res_w['cnt'] if res_w else 0
+    
+    conn.close()
+
+    # 3. عرض صفحة متابعة التذكرة للمواطن
+    return render_template_string('''
+        <!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>متابعة تذكرتك - {{ ticket.ticket_number }}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="refresh" content="10">
+        <style>
+            body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 15px; box-sizing: border-box; }
+            .card { background: #1e293b; padding: 25px; border-radius: 16px; text-align: center; width: 100%; max-width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
+        </style></head>
+        <body>
+        <div class="card">
+            <h3 style="color:#38bdf8;">🏢 {{ ticket.center_name }}</h3>
+            <div style="font-size: 14px; color: #94a3b8; margin-top: 10px;">مصلحة: <b style="color:#fff;">{{ ticket.service_name }}</b></div>
+            <div style="font-size: 14px; color: #94a3b8; margin-top: 15px;">رقم تذكرتك:</div>
+            <div style="font-size: 50px; font-weight: 900; color: #fbbf24; margin: 10px 0;">
+                {{ ticket.ticket_number }}
+            </div>
+            <div style="font-size: 14px; color: #cbd5e1; margin-bottom: 15px;">الحالة الحالية: 
+                <span style="color: {% if ticket.status == 'CALLED' %}#4ade80{% else %}#fbbf24{% endif %}; font-weight: bold;">
+                    {% if ticket.status == 'CALLED' %}قيد النداء حالياً!{% else %}في الانتظار{% endif %}
+                </span>
+            </div>
+            <div style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; padding: 12px; border-radius: 8px; font-size: 14px; margin-top: 20px;">
+                ⏳ الأشخاص أمامك في الانتظار: <b style="color: #fbbf24; font-size: 18px;">{{ waiting_count }}</b>
+            </div>
+        </div>
+        </body></html>
+    ''', ticket=ticket, waiting_count=waiting_count)
+    
+@app.route('/track-center/<int:center_id>')
+def track_center_live(center_id):
     conn = get_db_connection()
     center = conn.execute('SELECT * FROM centers WHERE id = ?', (center_id,)).fetchone()
     conn.close()
+    
     if not center:
-        return "المركز غير موجود", 404
+        return "<h2 style='text-align:center; font-family:Tahoma; margin-top:50px; color:#ef4444;'>عذراً، المركز غير موجود.</h2>", 404
         
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>متابعة الدور الآلي - {{ center.center_name }}</title>
+            <title>متابعة النداء الآلي - {{ center.center_name }}</title>
             <style>
-                body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #fff; font-family: 'Segoe UI', Tahoma, sans-serif; text-align: center; padding: 20px; margin: 0; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-                .card { background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border: 2px solid rgba(56, 189, 248, 0.3); border-radius: 20px; padding: 30px; width: 100%; max-width: 380px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); box-sizing: border-box; }
-                .center-title { font-size: 16px; color: #38bdf8; font-weight: bold; margin-bottom: 15px; }
-                .label-text { font-size: 14px; color: #94a3b8; margin-bottom: 5px; }
-                .ticket-num { font-size: 70px; color: #fbbf24; font-weight: 900; margin: 10px 0; text-shadow: 0 0 20px rgba(251,191,36,0.4); }
-                .service-name { font-size: 18px; color: #4ade80; font-weight: bold; margin-top: 10px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; }
-                .status-box { margin-top: 20px; font-size: 13px; color: #cbd5e1; }
-                .pulse { animation: pulse-animation 1.5s infinite; }
-                @keyframes pulse-animation { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+                body { background: #0f172a; color: #fff; font-family: Tahoma; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 15px; box-sizing: border-box; }
+                .card { background: #1e293b; padding: 25px; border-radius: 16px; text-align: center; width: 100%; max-width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
+                .ticket-num { font-size: 70px; font-weight: 900; color: #fbbf24; margin: 15px 0; text-shadow: 0 0 15px rgba(251,191,36,0.4); }
+                .service-name { font-size: 18px; color: #4ade80; font-weight: bold; background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px; margin-top: 10px; }
+                .pulse { animation: pulse-animation 1.2s infinite; }
+                @keyframes pulse-animation { 0% { transform: scale(1); } 50% { transform: scale(1.04); } 100% { transform: scale(1); } }
             </style>
         </head>
         <body>
-            <div class="card">
-                <div class="center-title">🏢 {{ center.center_name }}</div>
-                <div class="label-text">رقم التذكرة قيد النداء حالياً</div>
-                <div id="phoneTicket" class="ticket-num">---</div>
-                <div id="phoneService" class="service-name">جاري تحميل البيانات...</div>
-                <div class="status-box">🔄 يتم تحديث الدور تلقائياً على هاتفك</div>
-            </div>
+        <div class="card">
+            <h3 style="color:#38bdf8; margin-top:0;">🏢 {{ center.center_name }}</h3>
+            <div style="font-size: 14px; color: #94a3b8;">رقم التذكرة قيد النداء حالياً:</div>
+            <div id="phoneTicket" class="ticket-num">---</div>
+            <div id="phoneService" class="service-name">في انتظار بدء النداء...</div>
+            <div style="font-size: 12px; color: #64748b; margin-top: 20px;">🔄 يتحدث تلقائياً لحظة النداء على الشاشة</div>
+        </div>
 
-            <script>
-                function updatePhoneView() {
-                    fetch('/api/display-data/{{ center.id }}')
-                        .then(res => res.json())
-                        .then(data => {
-                            let ticketEl = document.getElementById('phoneTicket');
-                            let serviceEl = document.getElementById('phoneService');
-                            
-                            if (data.current && data.current.id) {
-                                ticketEl.innerText = data.current.ticket_number;
-                                serviceEl.innerText = data.current.service_name;
-                                ticketEl.classList.add('pulse');
-                            } else {
-                                ticketEl.innerText = '---';
-                                serviceEl.innerText = 'في انتظار بدء النداء...';
-                                ticketEl.classList.remove('pulse');
-                            }
-                        }).catch(err => console.log('خطأ في التحديث'));
-                }
-                
-                // تحديث دور الهاتف كل ثانيتين بالتزامن مع شاشة العرض الكبرى
-                setInterval(updatePhoneView, 2000);
-                updatePhoneView();
-            </script>
-        </body>
-        </html>
+        <script>
+            function fetchLiveTicket() {
+                fetch('/api/display-data/{{ center.id }}')
+                    .then(res => res.json())
+                    .then(data => {
+                        let ticketEl = document.getElementById('phoneTicket');
+                        let serviceEl = document.getElementById('phoneService');
+                        
+                        if (data.current && data.current.id) {
+                            ticketEl.innerText = data.current.ticket_number;
+                            serviceEl.innerText = data.current.service_name;
+                            ticketEl.classList.add('pulse');
+                        } else {
+                            ticketEl.innerText = '---';
+                            serviceEl.innerText = 'في انتظار بدء النداء...';
+                            ticketEl.classList.remove('pulse');
+                        }
+                    }).catch(err => console.log('خطأ في التحديث'));
+            }
+            
+            // تحديث فوري كل ثانيتين بالتزامن مع شاشة العرض الكبرى
+            setInterval(fetchLiveLink = fetchLiveTicket, 2000);
+            fetchLiveTicket();
+        </script>
+        </body></html>
     ''', center=center)
-
-@app.route('/api/live-display/<int:center_id>')
-def api_live_display(center_id):
-    conn = get_db_connection()
-    # جلب آخر تذكرة تم النداء عليها وتكون حالتها CALLED
-    called = conn.execute('''
-        SELECT t.ticket_number, s.name as service_name, t.counter_name 
-        FROM queue_tokens t
-        JOIN services s ON t.service_id = s.id
-        WHERE t.center_id = ? AND t.status = 'CALLED'
-        ORDER BY t.updated_at DESC LIMIT 1
-    ''', (center_id,)).fetchone()
-    conn.close()
-    
-    if called:
-        return {
-            "success": True, 
-            "ticket_number": called['ticket_number'], 
-            "service_name": called['service_name'],
-            "counter_name": called.get('counter_name', 'الشباك الرئيسي')
-        }
-    return {"success": False}
-
 
 # مسار لتحميل نسخة احتياطية لقاعدة البيانات (تم نقله إلى النطاق الصحيح)
 @app.route('/admin/backup-db')
