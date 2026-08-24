@@ -1351,44 +1351,68 @@ def reset_tickets(center_id):
         
     return jsonify({'success': success, 'message': message})  
     
-@app.route('/track/<int:token_id>')
-def track_token(token_id):
+@app.route('/track/<int:center_id>')
+def track_center(center_id):
     conn = get_db_connection()
-    # استعلام جلب معلومات التذكرة وحالتها ومكانها لتتبعها عبر الهاتف
-    token = conn.execute('''
-        SELECT t.*, s.service_name, c.center_name 
-        FROM queue_tokens t 
-        JOIN services s ON t.service_id = s.id 
-        JOIN centers c ON t.center_id = c.id 
-        WHERE t.id = ?
-    ''', (token_id,)).fetchone()
+    center = conn.execute('SELECT * FROM centers WHERE id = ?', (center_id,)).fetchone()
     conn.close()
-    
-    if not token:
-        return "التذكرة غير موجودة أو انتهت صلاحيتها", 404
+    if not center:
+        return "المركز غير موجود", 404
         
-    # يمكنك عرض صفحة بسيطة للمواطن يتابع فيها دوره
     return render_template_string('''
         <!DOCTYPE html><html lang="ar" dir="rtl">
-        <head><meta charset="UTF-8"><title>متابعة دور التذكرة</title>
-        <style>
-            body { background: #0f172a; color: #fff; font-family: Tahoma; text-align: center; padding: 30px; }
-            .card { background: #1e293b; border: 2px solid #38bdf8; border-radius: 15px; padding: 25px; max-width: 400px; margin: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-            .ticket-num { font-size: 60px; color: #fbbf24; font-weight: bold; margin: 10px 0; }
-            .info { font-size: 18px; margin: 10px 0; color: #e2e8f0; }
-        </style>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>متابعة الدور الآلي - {{ center.center_name }}</title>
+            <style>
+                body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #fff; font-family: 'Segoe UI', Tahoma, sans-serif; text-align: center; padding: 20px; margin: 0; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+                .card { background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border: 2px solid rgba(56, 189, 248, 0.3); border-radius: 20px; padding: 30px; width: 100%; max-width: 380px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); box-sizing: border-box; }
+                .center-title { font-size: 16px; color: #38bdf8; font-weight: bold; margin-bottom: 15px; }
+                .label-text { font-size: 14px; color: #94a3b8; margin-bottom: 5px; }
+                .ticket-num { font-size: 70px; color: #fbbf24; font-weight: 900; margin: 10px 0; text-shadow: 0 0 20px rgba(251,191,36,0.4); }
+                .service-name { font-size: 18px; color: #4ade80; font-weight: bold; margin-top: 10px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; }
+                .status-box { margin-top: 20px; font-size: 13px; color: #cbd5e1; }
+                .pulse { animation: pulse-animation 1.5s infinite; }
+                @keyframes pulse-animation { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+            </style>
         </head>
         <body>
             <div class="card">
-                <h2>متابعة الدور الآلي</h2>
-                <div class="info">المركز: {{ token.center_name }}</div>
-                <div class="ticket-num">{{ token.ticket_number }}</div>
-                <div class="info">المصلحة: {{ token.service_name }}</div>
-                <div class="info" style="margin-top: 20px; font-size: 14px; color: #38bdf8;">حالة التذكرة الحالية: {{ token.status }}</div>
+                <div class="center-title">🏢 {{ center.center_name }}</div>
+                <div class="label-text">رقم التذكرة قيد النداء حالياً</div>
+                <div id="phoneTicket" class="ticket-num">---</div>
+                <div id="phoneService" class="service-name">جاري تحميل البيانات...</div>
+                <div class="status-box">🔄 يتم تحديث الدور تلقائياً على هاتفك</div>
             </div>
+
+            <script>
+                function updatePhoneView() {
+                    fetch('/api/display-data/{{ center.id }}')
+                        .then(res => res.json())
+                        .then(data => {
+                            let ticketEl = document.getElementById('phoneTicket');
+                            let serviceEl = document.getElementById('phoneService');
+                            
+                            if (data.current && data.current.id) {
+                                ticketEl.innerText = data.current.ticket_number;
+                                serviceEl.innerText = data.current.service_name;
+                                ticketEl.classList.add('pulse');
+                            } else {
+                                ticketEl.innerText = '---';
+                                serviceEl.innerText = 'في انتظار بدء النداء...';
+                                ticketEl.classList.remove('pulse');
+                            }
+                        }).catch(err => console.log('خطأ في التحديث'));
+                }
+                
+                // تحديث دور الهاتف كل ثانيتين بالتزامن مع شاشة العرض الكبرى
+                setInterval(updatePhoneView, 2000);
+                updatePhoneView();
+            </script>
         </body>
         </html>
-    ''', token=token)
+    ''', center=center)
 
 @app.route('/api/live-display/<int:center_id>')
 def api_live_display(center_id):
